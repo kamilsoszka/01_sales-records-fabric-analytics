@@ -1,0 +1,48 @@
+table geography
+	lineageTag: a568add9-8911-4dfb-a64e-47c0c2001036
+	sourceLineageTag: [dbo].[geography]
+
+	column geography_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 4bfa60ad-fe74-4d25-82cd-8085375a3255
+		sourceLineageTag: geography_key
+		summarizeBy: sum
+		sourceColumn: geography_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column country
+		dataType: string
+		lineageTag: 1aa9103e-28fa-4f0c-b8b5-c1d201a6d508
+		sourceLineageTag: country
+		summarizeBy: none
+		sourceColumn: country
+
+		annotation SummarizationSetBy = Automatic
+
+	column region
+		dataType: string
+		lineageTag: dca732f4-4c85-4e94-8a2d-a60cfdb2d32d
+		sourceLineageTag: region
+		summarizeBy: none
+		sourceColumn: region
+
+		annotation SummarizationSetBy = Automatic
+
+	column geography_name
+		dataType: string
+		lineageTag: 3be16bf6-e240-4918-b2be-3354e942b501
+		sourceLineageTag: geography_name
+		summarizeBy: none
+		sourceColumn: geography_name
+
+		annotation SummarizationSetBy = Automatic
+
+	partition geography = entity
+		mode: directLake
+		source
+			entityName: geography
+			schemaName: dbo
+			expressionSource: 'DirectLake - SalesRecordsLakehouse'
+

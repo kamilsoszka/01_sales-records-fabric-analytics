@@ -1,0 +1,147 @@
+table _Measures
+	lineageTag: 7dca8349-0677-4a1d-aff3-746aca508605
+
+	measure 'Total Revenue' = SUM('sales'[total_revenue])
+		formatString: #,0.00
+		displayFolder: Sales
+		lineageTag: e04253f8-a740-422f-8616-383d1d0c0894
+
+	measure 'Total Cost' = SUM('sales'[total_cost])
+		formatString: #,0.00
+		displayFolder: Sales
+		lineageTag: bd4b30b0-c1f3-4f24-9128-616102b1f86a
+
+	measure 'Total Profit' = SUM('sales'[total_profit])
+		formatString: #,0.00
+		displayFolder: Sales
+		lineageTag: 19167efe-db4e-411f-a71f-0b4ee7b0d4ce
+
+	measure 'Profit Margin %' =
+			DIVIDE(
+						SUM('sales'[total_profit]),
+						SUM('sales'[total_revenue])
+					)
+		formatString: 0.00%
+		displayFolder: Sales
+		lineageTag: cf105cfb-6dc3-48f9-990c-c81ca9e57e41
+
+	measure 'Units Sold' = SUM('sales'[units_sold])
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: 8dbf4e04-5072-45ca-884b-8949d56186b0
+
+	measure 'Order Count' = DISTINCTCOUNT('sales'[order_id])
+		formatString: #,0
+		displayFolder: Sales
+		lineageTag: 083c057a-676f-4142-8bc6-114a4d4a8a2e
+
+	measure 'Average Order Value' =
+			DIVIDE(
+						SUM('sales'[total_revenue]),
+						DISTINCTCOUNT('sales'[order_id])
+					)
+		formatString: #,0.00
+		displayFolder: Sales
+		lineageTag: 44fe5996-605f-4d22-a3e8-4d62f3909857
+
+	measure 'Average Delivery Days' = AVERAGE('sales'[delivery_days])
+		formatString: 0.00
+		displayFolder: Sales
+		lineageTag: 4d35d4db-77b4-460c-9c9c-3a4d853667ad
+
+	measure 'Revenue by Ship Date' =
+			CALCULATE(
+						SUM('sales'[total_revenue]),
+						USERELATIONSHIP(
+							'sales'[ship_date_key],
+							'date'[date_key]
+						)
+					)
+		formatString: #,0.00
+		displayFolder: Sales\Shipping
+		lineageTag: 7360d6d9-c315-40fe-acc8-37bf8cb2a9c4
+
+	measure 'Budget Revenue' = SUM('budget'[budget_revenue])
+		formatString: #,0.00
+		displayFolder: Budget
+		lineageTag: 893cebc5-b004-42cc-a921-e1a50f9dbf3a
+
+	measure 'Budget Cost' = SUM('budget'[budget_cost])
+		formatString: #,0.00
+		displayFolder: Budget
+		lineageTag: d84be886-0556-485e-b481-f84d0c024ec9
+
+	measure 'Budget Profit' = SUM('budget'[budget_profit])
+		formatString: #,0.00
+		displayFolder: Budget
+		lineageTag: 6157821a-11d1-407d-b70f-5cdb40d7d761
+
+	measure 'Budget Units' = SUM('budget'[budget_units])
+		formatString: #,0
+		displayFolder: Budget
+		lineageTag: b4eb8302-9e77-43a2-b8da-bcf94bdbf052
+
+	measure 'Revenue Variance' =
+			SUM('sales'[total_revenue])
+					- SUM('budget'[budget_revenue])
+		formatString: #,0.00;-#,0.00;0.00
+		displayFolder: Variance
+		lineageTag: db6f5d62-705e-401e-877f-a491e0df8f58
+
+	measure 'Revenue Variance %' =
+			DIVIDE(
+						SUM('sales'[total_revenue])
+						- SUM('budget'[budget_revenue]),
+						SUM('budget'[budget_revenue])
+					)
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Variance
+		lineageTag: e94e5f7c-f97d-42be-bad1-fc4c7f11c52e
+
+	measure 'Profit Variance' =
+			SUM('sales'[total_profit])
+					- SUM('budget'[budget_profit])
+		formatString: #,0.00;-#,0.00;0.00
+		displayFolder: Variance
+		lineageTag: 1787bbca-2e34-4d26-ab63-125a39d167fc
+
+	measure 'Profit Variance %' =
+			DIVIDE(
+						SUM('sales'[total_profit])
+						- SUM('budget'[budget_profit]),
+						SUM('budget'[budget_profit])
+					)
+		formatString: 0.00%;-0.00%;0.00%
+		displayFolder: Variance
+		lineageTag: 4c0693c5-5580-4a3f-ad71-f4c9930ae9d1
+
+	measure 'Revenue Budget Attainment %' =
+			DIVIDE(
+						SUM('sales'[total_revenue]),
+						SUM('budget'[budget_revenue])
+					)
+		formatString: 0.00%
+		displayFolder: Variance
+		lineageTag: ee6ea9f7-2213-46bc-bef7-880b1c46b94f
+
+	measure 'Profit Budget Attainment %' =
+			DIVIDE(
+						SUM('sales'[total_profit]),
+						SUM('budget'[budget_profit])
+					)
+		formatString: 0.00%
+		displayFolder: Variance
+		lineageTag: 755241ac-e2d3-4dfd-b7df-78269e9875d4
+
+	column MeasureContainer
+		dataType: string
+		isHidden
+		lineageTag: 48d82aae-de87-4538-b850-4fe3980079b4
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [MeasureContainer]
+
+	partition _Measures = calculated
+		mode: import
+		source = ROW("MeasureContainer", "Measures")
+

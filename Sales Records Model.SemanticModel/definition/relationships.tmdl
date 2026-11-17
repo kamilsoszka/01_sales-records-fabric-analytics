@@ -1,0 +1,33 @@
+relationship Sales_OrderDate_Date
+	fromColumn: sales.order_date_key
+	toColumn: date.date_key
+
+relationship Sales_ShipDate_Date
+	isActive: false
+	fromColumn: sales.ship_date_key
+	toColumn: date.date_key
+
+relationship Sales_Product
+	fromColumn: sales.product_key
+	toColumn: product.product_key
+
+relationship Sales_Geography
+	fromColumn: sales.geography_key
+	toColumn: geography.geography_key
+
+relationship Sales_SalesChannel
+	fromColumn: sales.sales_channel_key
+	toColumn: saleschannel.sales_channel_key
+
+relationship Sales_OrderPriority
+	fromColumn: sales.order_priority_key
+	toColumn: orderpriority.order_priority_key
+
+relationship Budget_Date
+	fromColumn: budget.budget_month_key
+	toColumn: date.date_key
+
+relationship Budget_Product
+	fromColumn: budget.product_key
+	toColumn: product.product_key
+

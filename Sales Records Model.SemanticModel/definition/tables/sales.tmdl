@@ -1,0 +1,189 @@
+table sales
+	lineageTag: 2c794ea6-f2d0-45bd-83f6-a88a31829b0f
+	sourceLineageTag: [dbo].[sales]
+
+	column sales_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 25f37255-fd6e-469f-837e-e256c10e3e88
+		sourceLineageTag: sales_key
+		summarizeBy: sum
+		sourceColumn: sales_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column order_id
+		dataType: int64
+		formatString: 0
+		lineageTag: 412fb814-f98d-4663-a285-3ba998cf9b70
+		sourceLineageTag: order_id
+		summarizeBy: sum
+		sourceColumn: order_id
+
+		annotation SummarizationSetBy = Automatic
+
+	column order_date_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 9d03e306-d743-4f4d-bef6-10d071d6c218
+		sourceLineageTag: order_date_key
+		summarizeBy: sum
+		sourceColumn: order_date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column ship_date_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 407c9da8-2343-4456-ae56-f5d4640f5606
+		sourceLineageTag: ship_date_key
+		summarizeBy: sum
+		sourceColumn: ship_date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column product_key
+		dataType: int64
+		formatString: 0
+		lineageTag: d3580f94-74a5-4d6e-8aa8-86bb2c078c84
+		sourceLineageTag: product_key
+		summarizeBy: sum
+		sourceColumn: product_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column geography_key
+		dataType: int64
+		formatString: 0
+		lineageTag: e9fc2249-479c-43bf-9834-a0ee6d56658d
+		sourceLineageTag: geography_key
+		summarizeBy: sum
+		sourceColumn: geography_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column sales_channel_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 3b41310c-e1fd-44f0-9e85-dd5a33931b0c
+		sourceLineageTag: sales_channel_key
+		summarizeBy: sum
+		sourceColumn: sales_channel_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column order_priority_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 72909dcf-5468-4ba6-9971-43efde4e0d8f
+		sourceLineageTag: order_priority_key
+		summarizeBy: sum
+		sourceColumn: order_priority_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column units_sold
+		dataType: int64
+		formatString: 0
+		lineageTag: 51ae7aa9-9523-4a43-8670-785e6dd26784
+		sourceLineageTag: units_sold
+		summarizeBy: sum
+		sourceColumn: units_sold
+
+		annotation SummarizationSetBy = Automatic
+
+	column unit_price
+		dataType: double
+		lineageTag: 80808f2d-d2eb-4468-a3e7-56bc8b389db0
+		sourceLineageTag: unit_price
+		summarizeBy: sum
+		sourceColumn: unit_price
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column unit_cost
+		dataType: double
+		lineageTag: eb2acbab-322e-4da1-b954-ec281c28b13e
+		sourceLineageTag: unit_cost
+		summarizeBy: sum
+		sourceColumn: unit_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_revenue
+		dataType: double
+		lineageTag: 5a1cc9c2-964a-4e87-838c-3d883ac8fcb5
+		sourceLineageTag: total_revenue
+		summarizeBy: sum
+		sourceColumn: total_revenue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_cost
+		dataType: double
+		lineageTag: 6ba957c5-932e-46bf-ae49-65c84102824a
+		sourceLineageTag: total_cost
+		summarizeBy: sum
+		sourceColumn: total_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_profit
+		dataType: double
+		lineageTag: d3a7622d-7ca9-44ff-85d2-7f719a6ded5c
+		sourceLineageTag: total_profit
+		summarizeBy: sum
+		sourceColumn: total_profit
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column delivery_days
+		dataType: int64
+		formatString: 0
+		lineageTag: b206258c-3ffe-4884-9141-721f21677a8e
+		sourceLineageTag: delivery_days
+		summarizeBy: sum
+		sourceColumn: delivery_days
+
+		annotation SummarizationSetBy = Automatic
+
+	column unit_margin
+		dataType: double
+		lineageTag: f6f0acf5-bda8-46bc-a71e-cc4eccabd74c
+		sourceLineageTag: unit_margin
+		summarizeBy: sum
+		sourceColumn: unit_margin
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column profit_margin_pct
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: c11efd79-0742-4ce1-95dd-e2c26196eb40
+		sourceLineageTag: profit_margin_pct
+		summarizeBy: sum
+		sourceColumn: profit_margin_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	partition sales = entity
+		mode: directLake
+		source
+			entityName: sales
+			schemaName: dbo
+			expressionSource: 'DirectLake - SalesRecordsLakehouse'
+

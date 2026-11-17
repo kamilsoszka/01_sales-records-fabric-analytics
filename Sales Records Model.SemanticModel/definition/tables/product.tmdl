@@ -1,0 +1,49 @@
+table product
+	lineageTag: 20432756-3a8e-48ed-bd88-8b556e30fd94
+	sourceLineageTag: [dbo].[product]
+
+	column product_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 3d7867a4-4821-447e-9242-98f0ae1b234f
+		sourceLineageTag: product_key
+		summarizeBy: sum
+		sourceColumn: product_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column item_type
+		dataType: string
+		lineageTag: 2b910530-1a8f-44db-9632-5e8b28fe45f0
+		sourceLineageTag: item_type
+		summarizeBy: none
+		sourceColumn: item_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column product_name
+		dataType: string
+		lineageTag: 111d4e16-9aa5-4e18-a3ad-1ef39f642acc
+		sourceLineageTag: product_name
+		summarizeBy: none
+		sourceColumn: product_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column product_sort_order
+		dataType: int64
+		formatString: 0
+		lineageTag: 84021e3c-73c0-4568-8db7-1e9aa38bcfaf
+		sourceLineageTag: product_sort_order
+		summarizeBy: sum
+		sourceColumn: product_sort_order
+
+		annotation SummarizationSetBy = Automatic
+
+	partition product = entity
+		mode: directLake
+		source
+			entityName: product
+			schemaName: dbo
+			expressionSource: 'DirectLake - SalesRecordsLakehouse'
+

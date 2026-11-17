@@ -1,0 +1,346 @@
+{
+  "properties": {
+    "jobMode": "Batch",
+    "source": {
+      "type": "DelimitedText",
+      "connectionSettings": {
+        "type": "SharePointOnlineFile",
+        "externalReferences": {
+          "connection": "75d47c89-d741-44a7-af9a-bfa531879c6f"
+        }
+      }
+    },
+    "destination": {
+      "type": "LakehouseTable",
+      "connectionSettings": {
+        "type": "Lakehouse",
+        "typeProperties": {
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "artifactId": "80ea7596-7a74-9b61-43d4-ef6b78d6335e",
+          "rootFolder": "Tables"
+        }
+      }
+    },
+    "policy": {
+      "timeout": "0.12:00:00",
+      "retry": 0
+    }
+  },
+  "activities": [
+    {
+      "id": "751d0a8e-ab95-4762-a882-608939a475d3",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "location": {
+              "type": "SharePointOnlineFileLocation",
+              "fileName": "product.csv",
+              "folderPath": "Documents/sales-records"
+            },
+            "columnDelimiter": ",",
+            "rowDelimiter": "\n",
+            "escapeChar": "\\",
+            "firstRowAsHeader": true,
+            "multiline": true,
+            "quoteChar": "\""
+          },
+          "storeSettings": {
+            "recursive": true,
+            "enablePartitionDiscovery": false
+          },
+          "formatSettings": {}
+        },
+        "destination": {
+          "partitionOption": "None",
+          "writeBehavior": "Overwrite",
+          "datasetSettings": {
+            "schema": "dbo",
+            "table": "product"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "f6b5928a-3b45-4e2a-b24f-3ea5f0cf087a",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "location": {
+              "type": "SharePointOnlineFileLocation",
+              "fileName": "orderpriority.csv",
+              "folderPath": "Documents/sales-records"
+            },
+            "columnDelimiter": ",",
+            "rowDelimiter": "\n",
+            "escapeChar": "\\",
+            "firstRowAsHeader": true,
+            "multiline": true,
+            "quoteChar": "\""
+          },
+          "storeSettings": {
+            "recursive": true,
+            "enablePartitionDiscovery": false
+          },
+          "formatSettings": {}
+        },
+        "destination": {
+          "partitionOption": "None",
+          "writeBehavior": "Overwrite",
+          "datasetSettings": {
+            "schema": "dbo",
+            "table": "orderpriority"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "0d231135-2cb0-44e1-a04e-e58bf12c9c9f",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "location": {
+              "type": "SharePointOnlineFileLocation",
+              "fileName": "geography.csv",
+              "folderPath": "Documents/sales-records"
+            },
+            "columnDelimiter": ",",
+            "rowDelimiter": "\n",
+            "escapeChar": "\\",
+            "firstRowAsHeader": true,
+            "multiline": true,
+            "quoteChar": "\""
+          },
+          "storeSettings": {
+            "recursive": true,
+            "enablePartitionDiscovery": false
+          },
+          "formatSettings": {}
+        },
+        "destination": {
+          "partitionOption": "None",
+          "writeBehavior": "Overwrite",
+          "datasetSettings": {
+            "schema": "dbo",
+            "table": "geography"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "c7ed5479-794e-43d4-9140-c015bf1b1bdd",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "location": {
+              "type": "SharePointOnlineFileLocation",
+              "fileName": "saleschannel.csv",
+              "folderPath": "Documents/sales-records"
+            },
+            "columnDelimiter": ",",
+            "rowDelimiter": "\n",
+            "escapeChar": "\\",
+            "firstRowAsHeader": true,
+            "multiline": true,
+            "quoteChar": "\""
+          },
+          "storeSettings": {
+            "recursive": true,
+            "enablePartitionDiscovery": false
+          },
+          "formatSettings": {}
+        },
+        "destination": {
+          "partitionOption": "None",
+          "writeBehavior": "Overwrite",
+          "datasetSettings": {
+            "schema": "dbo",
+            "table": "saleschannel"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "89d73fb9-e04a-442b-8a24-63753714986d",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "location": {
+              "type": "SharePointOnlineFileLocation",
+              "fileName": "date.csv",
+              "folderPath": "Documents/sales-records"
+            },
+            "columnDelimiter": ",",
+            "rowDelimiter": "\n",
+            "escapeChar": "\\",
+            "firstRowAsHeader": true,
+            "multiline": true,
+            "quoteChar": "\""
+          },
+          "storeSettings": {
+            "recursive": true,
+            "enablePartitionDiscovery": false
+          },
+          "formatSettings": {}
+        },
+        "destination": {
+          "partitionOption": "None",
+          "writeBehavior": "Overwrite",
+          "datasetSettings": {
+            "schema": "dbo",
+            "table": "date"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "784cf2d8-65f5-4783-a50a-297eb60741eb",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "location": {
+              "type": "SharePointOnlineFileLocation",
+              "fileName": "budget.csv",
+              "folderPath": "Documents/sales-records"
+            },
+            "columnDelimiter": ",",
+            "rowDelimiter": "\n",
+            "escapeChar": "\\",
+            "firstRowAsHeader": true,
+            "multiline": true,
+            "quoteChar": "\""
+          },
+          "storeSettings": {
+            "recursive": true,
+            "enablePartitionDiscovery": false
+          },
+          "formatSettings": {}
+        },
+        "destination": {
+          "partitionOption": "None",
+          "writeBehavior": "Overwrite",
+          "datasetSettings": {
+            "schema": "dbo",
+            "table": "budget"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    },
+    {
+      "id": "ce3b926b-a962-4f8b-afc2-ad22ed899f26",
+      "properties": {
+        "source": {
+          "datasetSettings": {
+            "location": {
+              "type": "SharePointOnlineFileLocation",
+              "fileName": "sales.csv",
+              "folderPath": "Documents/sales-records"
+            },
+            "columnDelimiter": ",",
+            "rowDelimiter": "\n",
+            "escapeChar": "\\",
+            "firstRowAsHeader": true,
+            "multiline": true,
+            "quoteChar": "\""
+          },
+          "storeSettings": {
+            "recursive": true,
+            "enablePartitionDiscovery": false
+          },
+          "formatSettings": {}
+        },
+        "destination": {
+          "partitionOption": "None",
+          "writeBehavior": "Overwrite",
+          "datasetSettings": {
+            "schema": "dbo",
+            "table": "sales"
+          },
+          "applyVOrder": false,
+          "enableTimestampNtz": false
+        },
+        "enableStaging": false,
+        "translator": {
+          "type": "TabularTranslator"
+        },
+        "typeConversionSettings": {
+          "typeConversion": {
+            "allowDataTruncation": true,
+            "treatBooleanAsNumber": false
+          }
+        }
+      }
+    }
+  ]
+}

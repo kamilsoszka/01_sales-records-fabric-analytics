@@ -1,0 +1,150 @@
+table budget
+	lineageTag: b4978003-f224-4440-8f2c-1f2db7c8f176
+	sourceLineageTag: [dbo].[budget]
+
+	column budget_key
+		dataType: int64
+		formatString: 0
+		lineageTag: c5f55e1b-3d3a-4eb3-bd50-85d139d24dc8
+		sourceLineageTag: budget_key
+		summarizeBy: sum
+		sourceColumn: budget_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column budget_month_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 2c74b28e-c4ce-4c47-a79a-53f11a743a64
+		sourceLineageTag: budget_month_key
+		summarizeBy: sum
+		sourceColumn: budget_month_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column product_key
+		dataType: int64
+		formatString: 0
+		lineageTag: bfb0bd29-a384-4497-9a64-8c13589c8cd2
+		sourceLineageTag: product_key
+		summarizeBy: sum
+		sourceColumn: product_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column budget_units
+		dataType: int64
+		formatString: 0
+		lineageTag: dc6c9a89-7c3a-4e85-8cba-bfb939475a88
+		sourceLineageTag: budget_units
+		summarizeBy: sum
+		sourceColumn: budget_units
+
+		annotation SummarizationSetBy = Automatic
+
+	column budget_revenue
+		dataType: double
+		lineageTag: 99b83429-9051-4e2c-be0e-b60c43bd2756
+		sourceLineageTag: budget_revenue
+		summarizeBy: sum
+		sourceColumn: budget_revenue
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column budget_cost
+		dataType: double
+		lineageTag: 8950fe65-f8ce-403e-9ce7-9dcacc66f8f3
+		sourceLineageTag: budget_cost
+		summarizeBy: sum
+		sourceColumn: budget_cost
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column budget_profit
+		dataType: double
+		lineageTag: 4b73fe46-9808-4534-8045-2abff056595f
+		sourceLineageTag: budget_profit
+		summarizeBy: sum
+		sourceColumn: budget_profit
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column budget_profit_margin_pct
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 228b3ae9-eab6-4a9b-a6aa-b7bece47131f
+		sourceLineageTag: budget_profit_margin_pct
+		summarizeBy: sum
+		sourceColumn: budget_profit_margin_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column budget_version
+		dataType: string
+		lineageTag: f69ab35d-3554-474b-908f-8e5cc5bcadba
+		sourceLineageTag: budget_version
+		summarizeBy: none
+		sourceColumn: budget_version
+
+		annotation SummarizationSetBy = Automatic
+
+	column units_growth_factor
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 01bf06fc-cdeb-49fd-8a9f-addb3a73576e
+		sourceLineageTag: units_growth_factor
+		summarizeBy: sum
+		sourceColumn: units_growth_factor
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column revenue_growth_factor
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: 28c2f220-8f94-440e-8c96-da7ca27c978d
+		sourceLineageTag: revenue_growth_factor
+		summarizeBy: sum
+		sourceColumn: revenue_growth_factor
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column cost_growth_factor
+		dataType: decimal
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: e02a7c82-8dd3-41be-999c-05e9dd44bfbc
+		sourceLineageTag: cost_growth_factor
+		summarizeBy: sum
+		sourceColumn: cost_growth_factor
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"currencyCulture":"en-US"}
+
+	column budget_method
+		dataType: string
+		lineageTag: e1e4589c-c265-4048-bdb7-393f3cdee3f4
+		sourceLineageTag: budget_method
+		summarizeBy: none
+		sourceColumn: budget_method
+
+		annotation SummarizationSetBy = Automatic
+
+	partition budget = entity
+		mode: directLake
+		source
+			entityName: budget
+			schemaName: dbo
+			expressionSource: 'DirectLake - SalesRecordsLakehouse'
+

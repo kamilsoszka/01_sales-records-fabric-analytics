@@ -1,0 +1,174 @@
+table date
+	lineageTag: e37e6207-a6db-4735-8991-4fdb2d1a30f1
+	sourceLineageTag: [dbo].[date]
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		lineageTag: 62351264-9ba9-40c5-b53a-c65aedebab1d
+		sourceLineageTag: date_key
+		summarizeBy: none
+		sourceColumn: date_key
+
+		annotation SummarizationSetBy = User
+
+	column full_date
+		dataType: dateTime
+		isKey
+		formatString: yyyy-MM-dd
+		lineageTag: ddde6fca-5f4b-4192-a792-fadd4ecdfd53
+		sourceLineageTag: full_date
+		summarizeBy: none
+		sourceColumn: full_date
+
+		annotation SummarizationSetBy = User
+
+	column year
+		dataType: int64
+		formatString: 0
+		lineageTag: 02d15d3a-99a6-4fce-a4a1-d492166fba5d
+		sourceLineageTag: year
+		summarizeBy: none
+		sourceColumn: year
+
+		annotation SummarizationSetBy = User
+
+	column quarter_number
+		dataType: int64
+		formatString: 0
+		lineageTag: 37af87dd-e4c9-4e17-988f-217c758ad69a
+		sourceLineageTag: quarter_number
+		summarizeBy: none
+		sourceColumn: quarter_number
+
+		annotation SummarizationSetBy = User
+
+	column quarter_name
+		dataType: string
+		lineageTag: 2fbb6f16-ba95-4924-8ae1-c1bd0fb4e2c6
+		sourceLineageTag: quarter_name
+		summarizeBy: none
+		sourceColumn: quarter_name
+		sortByColumn: quarter_number
+
+		annotation SummarizationSetBy = User
+
+	column month_number
+		dataType: int64
+		formatString: 0
+		lineageTag: b0b45966-1b50-4f0e-afb4-e03461a5e85f
+		sourceLineageTag: month_number
+		summarizeBy: none
+		sourceColumn: month_number
+
+		annotation SummarizationSetBy = User
+
+	column month_name
+		dataType: string
+		lineageTag: d5a562df-851a-4e85-9abf-276dcb72e16c
+		sourceLineageTag: month_name
+		summarizeBy: none
+		sourceColumn: month_name
+		sortByColumn: month_number
+
+		annotation SummarizationSetBy = User
+
+	column month_short_name
+		dataType: string
+		lineageTag: 0b4d0a2f-98bf-4581-b762-dfaf17d2b022
+		sourceLineageTag: month_short_name
+		summarizeBy: none
+		sourceColumn: month_short_name
+		sortByColumn: month_number
+
+		annotation SummarizationSetBy = User
+
+	column year_month
+		dataType: string
+		lineageTag: 4602c24c-d32c-40f5-9c16-7478d248a19d
+		sourceLineageTag: year_month
+		summarizeBy: none
+		sourceColumn: year_month
+		sortByColumn: month_start_date
+
+		annotation SummarizationSetBy = User
+
+	column week_number
+		dataType: int64
+		formatString: 0
+		lineageTag: dc935e8c-b041-45c4-a920-a965327065e8
+		sourceLineageTag: week_number
+		summarizeBy: none
+		sourceColumn: week_number
+
+		annotation SummarizationSetBy = User
+
+	column day_of_month
+		dataType: int64
+		formatString: 0
+		lineageTag: 0e0e7b14-007a-4b44-aa69-a56728eed36d
+		sourceLineageTag: day_of_month
+		summarizeBy: none
+		sourceColumn: day_of_month
+
+		annotation SummarizationSetBy = User
+
+	column day_of_week_number
+		dataType: int64
+		formatString: 0
+		lineageTag: c112abaf-24ce-4c71-ac66-c4862ef38aa3
+		sourceLineageTag: day_of_week_number
+		summarizeBy: none
+		sourceColumn: day_of_week_number
+
+		annotation SummarizationSetBy = User
+
+	column day_of_week_name
+		dataType: string
+		lineageTag: ef25a1f1-dd8b-4db5-b8c0-559ae6e57c00
+		sourceLineageTag: day_of_week_name
+		summarizeBy: none
+		sourceColumn: day_of_week_name
+		sortByColumn: day_of_week_number
+
+		annotation SummarizationSetBy = User
+
+	column is_weekend
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 69bd0963-486a-4ec7-b92e-45ae4e7951e0
+		sourceLineageTag: is_weekend
+		summarizeBy: none
+		sourceColumn: is_weekend
+
+		annotation SummarizationSetBy = User
+
+	column month_start_date
+		dataType: dateTime
+		formatString: yyyy-MM-dd
+		lineageTag: 996c1783-1340-4f66-96dc-9a6b7e3e7190
+		sourceLineageTag: month_start_date
+		summarizeBy: none
+		sourceColumn: month_start_date
+
+		annotation SummarizationSetBy = User
+
+	column month_end_date
+		dataType: dateTime
+		formatString: yyyy-MM-dd
+		lineageTag: 4c449644-11b6-49e3-837b-2b79c8036485
+		sourceLineageTag: month_end_date
+		summarizeBy: none
+		sourceColumn: month_end_date
+
+		annotation SummarizationSetBy = User
+
+	partition date = entity
+		mode: directLake
+		source
+			entityName: date
+			schemaName: dbo
+			expressionSource: 'DirectLake - SalesRecordsLakehouse'
+
+	annotation __PBI_TimeIntelligenceEnabled = 1
+

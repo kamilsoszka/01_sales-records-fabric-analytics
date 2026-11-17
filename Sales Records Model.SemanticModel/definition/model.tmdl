@@ -1,0 +1,23 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation __PBI_TimeIntelligenceEnabled = 1
+
+annotation PBI_QueryOrder = ["DirectLake - SalesRecordsLakehouse"]
+
+annotation PBI_ProTooling = ["DirectLakeOnOneLakeInWeb","WebModelingEdit","TMDLView_Desktop","DaxQueryView_Desktop"]
+
+ref table budget
+ref table date
+ref table geography
+ref table orderpriority
+ref table product
+ref table sales
+ref table saleschannel
+ref table _Measures
+
