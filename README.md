@@ -1068,6 +1068,4 @@ Each tool was used for the workload for which it was best suited.
 
 ## License
 
-This project is licensed under the MIT License.
-
-LICENSE
+This project is licensed under the [MIT License](LICENSE).
