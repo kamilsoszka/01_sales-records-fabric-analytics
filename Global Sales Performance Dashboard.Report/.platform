@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "Global Sales Performance Dashboard"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "c5accc44-eeca-a7f9-45f8-ac8199fea0b5"
+  }
+}
