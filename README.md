@@ -577,6 +577,8 @@ The PBIR notebook must validate the current report schema, visual IDs, paths, an
 
 ## Project presentation
 
+<img width="1152" height="647" alt="image" src="https://github.com/user-attachments/assets/e82b1ff6-8ac3-48c0-b09e-f173707ce626" />
+
 [Download the project presentation](Sales-Records-Fabric-Analytics-Presentation.pptx)
 
 ## License
