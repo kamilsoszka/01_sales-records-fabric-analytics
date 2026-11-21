@@ -575,6 +575,10 @@ The PBIR notebook must validate the current report schema, visual IDs, paths, an
 
 ---
 
+## Project presentation
+
+[Download the project presentation](Sales-Records-Fabric-Analytics-Presentation.pptx)
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
