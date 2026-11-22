@@ -2,143 +2,75 @@
 
 [![Microsoft Fabric](https://img.shields.io/badge/Microsoft%20Fabric-End--to--End%20Analytics-742774?logo=microsoft&logoColor=white)](https://www.microsoft.com/microsoft-fabric)
 [![Power BI](https://img.shields.io/badge/Power%20BI-Direct%20Lake-F2C811?logo=powerbi&logoColor=black)](https://powerbi.microsoft.com/)
-[![Python](https://img.shields.io/badge/Python-Data%20Validation-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-Validation-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![SQL](https://img.shields.io/badge/SQL-Lakehouse%20Endpoint-CC2927?logo=microsoftsqlserver&logoColor=white)](https://learn.microsoft.com/fabric/data-engineering/lakehouse-sql-analytics-endpoint)
 [![DAX](https://img.shields.io/badge/DAX-Semantic%20Model-5A5A5A)](https://learn.microsoft.com/dax/)
 [![PBIR](https://img.shields.io/badge/PBIR-Report%20Automation-00B7C3)](https://learn.microsoft.com/power-bi/developer/projects/projects-report)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-An end-to-end Microsoft Fabric data engineering and analytics project that transforms a synthetic five-million-row sales dataset into a validated dimensional model with automated ingestion, Delta Lake storage, Direct Lake semantic modeling, product-level budgeting, independent reconciliation, and a programmatically engineered Power BI reporting layer.
+A validation-driven Microsoft Fabric solution that transforms a synthetic **5,000,000-row sales source** into typed Delta tables, a dimensional model, a Direct Lake semantic model, an automated Power BI executive dashboard, and a separate semantic-model health solution.
 
-The solution combines Google Colab, DuckDB, OneDrive, Microsoft Fabric, Power BI, PBIR, Fabric REST APIs, Python, DAX Studio, Tabular Editor, SQL Server Management Studio, Visual Studio Code, and GitHub.
+The repository demonstrates the complete analytical path from source profiling and deduplication to orchestration, semantic modeling, PBIR report engineering, Fabric REST API deployment, independent reconciliation, and Git-based documentation.
 
 ![Global Sales Performance Dashboard](docs/images/global-sales-performance-dashboard.png)
 
 > [!NOTE]
-> The source data is synthetic and intended for technical testing, data engineering, semantic modeling, report engineering, and analytics practice. The project does not represent real commercial activity.
+> The source data is synthetic and intended for technical testing, data engineering, semantic modeling, report engineering, and analytics practice. It does not represent real commercial activity.
 
 ---
 
-## Table of contents
+## Project highlights
 
-- [Project overview](#project-overview)
-- [Business applications](#business-applications)
-- [Global Sales Performance Dashboard](#global-sales-performance-dashboard)
-- [Source dataset and data quality](#source-dataset-and-data-quality)
-- [Dimensional and budget model](#dimensional-and-budget-model)
-- [Solution architecture](#solution-architecture)
-- [Microsoft Fabric implementation](#microsoft-fabric-implementation)
-- [Direct Lake semantic model](#direct-lake-semantic-model)
-- [PBIR report automation](#pbir-report-automation)
-- [Validation strategy](#validation-strategy)
-- [Verified results](#verified-results)
-- [Repository structure](#repository-structure)
-- [Reproduction workflow](#reproduction-workflow)
-- [Operational considerations](#operational-considerations)
-- [Skills demonstrated](#skills-demonstrated)
-- [Limitations](#limitations)
-- [License](#license)
+| Area | Verified implementation |
+|---|---|
+| Source scale | 5,000,000 synthetic sales rows |
+| Valid analytical transactions | 2,097,152 |
+| Exact duplicates removed | 2,902,848 |
+| Analytical model | 2 fact tables and 5 shared dimensions |
+| Storage | Microsoft Fabric Lakehouse and Delta tables |
+| Orchestration | Copy Job, Data Pipeline, and PySpark notebook |
+| Semantic layer | Direct Lake semantic model with reusable DAX measures |
+| Business report | 1 Power BI page: `Executive Overview` |
+| Report definition | 11 PBIR visual definitions on a `1280 × 720` canvas |
+| Automation | Python, PBIR JSON, and Microsoft Fabric REST APIs |
+| Model governance | Separate semantic-model audit notebook, model, and report |
+| Validation | DuckDB, Python, SQL, DAX, DAX Studio, SSMS, Tabular Editor, and PBIR checks |
+| Repository assets | 10 Fabric item definitions, 9 PNG images, and 1 PowerPoint presentation |
 
 ---
 
-## Project overview
+## Why this repository is different
 
-The original source was a single flat CSV file containing **5,000,000 synthetic sales records**. The project converts that file into a governed analytical solution containing:
+This is not only a Power BI dashboard repository.
 
-- a deduplicated sales fact table,
-- a product-month budget fact table,
-- five shared dimensions,
-- a Microsoft Fabric Lakehouse,
-- typed Delta tables,
-- an automated Fabric pipeline,
-- a Direct Lake semantic model,
-- reusable DAX measures,
-- a five-page Power BI report,
-- PBIR report-definition automation,
-- independent Python, SQL, and DAX validation,
-- GitHub-integrated Fabric definitions.
+The implementation treats data quality, schema enforcement, semantic-model design, report definitions, API deployment, and verification as parts of one engineered system. Critical results are reconciled through independent tools instead of being accepted from a single execution engine.
 
-The analytical layer contains **2,097,152 unique transactions** after removal of **2,902,848 exact duplicate rows**.
+The repository is relevant to:
 
-## Business applications
-
-### Executive performance monitoring
-
-- Total revenue, profit, margin, units, and orders
-- Monthly Actual versus Budget trend
-- Product and regional contribution
-- Revenue budget attainment
-
-### Actual versus Budget analysis
-
-- Revenue and profit variance
-- Variance percentages and attainment
-- Monthly and product-level comparison
-- Identification of incomplete reporting periods
-
-### Product and geographic analysis
-
-- Top products by revenue, profit, and margin
-- Regional revenue contribution
-- Product profitability and volume
-- Country and market analysis
-
-### Channel, order, and delivery analysis
-
-- Online versus offline performance
-- Order-priority analysis
-- Revenue by order date and ship date
-- Average delivery duration
+- **Data engineers** evaluating ingestion, deduplication, Delta storage, PySpark typing, and orchestration.
+- **Analytics engineers** reviewing dimensional modeling, Actual-versus-Budget logic, validation, and reconciliation.
+- **Power BI developers** working with Direct Lake, DAX, TMDL, PBIR, and programmatic report definitions.
+- **Solution architects** assessing separation of concerns, deployment controls, reproducibility, and operational constraints.
+- **Recruiters and technical reviewers** looking for evidence of an end-to-end Microsoft Fabric implementation rather than isolated screenshots.
 
 ---
 
-## Global Sales Performance Dashboard
+## Business outcomes
 
-`Global Sales Performance Dashboard` is connected to `Sales Records Model` through Direct Lake and contains five analytical pages:
+The solution supports:
 
-1. **Executive Overview**
-2. **Budget Performance**
-3. **Product Performance**
-4. **Markets and Channels**
-5. **Orders and Delivery**
-
-### Executive Overview
-
-The portfolio-ready Executive Overview includes:
-
-- Year dropdown slicer
-- Revenue
-- Profit
-- Profit Margin
-- Revenue versus Budget attainment
-- Orders
-- Revenue versus Budget monthly trend
-- Top 5 Products by Revenue
-- Revenue by Region
-- Top 5 Products by Margin
-- Top 5 Products by Profit
-
-The displayed 2019 selection demonstrates:
-
-| KPI | Value |
-|---|---:|
-| Revenue | 260.84bn |
-| Profit | 76.96bn |
-| Profit Margin | 29.50% |
-| Revenue vs Budget | 95.24% |
-| Orders | 196K |
-
-![Global Sales Performance Executive Overview](docs/images/global-sales-performance-dashboard.png)
-
-The final design uses a fixed `1280 × 720` canvas, a consistent 12-pixel grid, aligned KPI cards, a dominant Actual-versus-Budget trend, and focused Top 5 rankings without unnecessary scrollbars.
+- executive monitoring of revenue, profit, margin, orders, and budget attainment;
+- monthly Actual-versus-Budget analysis;
+- product and regional contribution analysis;
+- Top 5 product rankings by revenue, profit, and margin;
+- independent verification of business totals;
+- repeatable inspection of semantic-model structure and health.
 
 ---
 
-## Source dataset and data quality
+## Source investigation and data quality
 
-The project uses the synthetic **5m Sales Records** dataset from [Excel BI Analytics](https://excelbianalytics.com/downloads-18-sample-csv-files-data-sets-for-testing-sales/).
-
-### Source discovery
+The original source was a flat CSV containing **5,000,000 synthetic sales records**.
 
 | Validation check | Result |
 |---|---:|
@@ -148,34 +80,41 @@ The project uses the synthetic **5m Sales Records** dataset from [Excel BI Analy
 | Conflicting duplicate Order IDs | 0 |
 | Maximum occurrences of one Order ID | 3 |
 
-The duplicate rows were identical across all 14 source columns. The raw source was preserved unchanged, while the analytical model was built from the unique transactions.
+The duplicated rows were identical across all 14 source columns. The raw source was preserved unchanged, while only exact duplicate rows were removed from the analytical output.
 
 ```text
 5,000,000 original rows
 - 2,902,848 exact duplicate rows
-= 2,097,152 valid analytical rows
+= 2,097,152 validated analytical rows
 ```
 
-### Transformation workflow
+### Validation controls
 
-1. Validate the source schema.
-2. Profile all five million rows with DuckDB.
-3. Reconcile revenue, cost, and profit formulas.
-4. Separate exact duplicates from conflicting records.
-5. Remove only exact duplicate rows.
-6. Standardize names to `snake_case`.
-7. Apply explicit numeric and date types.
-8. Create surrogate keys.
-9. Build facts and dimensions.
-10. Generate the product-month budget.
-11. Validate keys, relationships, and totals.
-12. Export seven analytical tables.
+The workflow checks:
+
+- expected schema and source row count;
+- required fields;
+- duplicate Order IDs;
+- exact duplicates versus conflicting records;
+- positive units and nonnegative prices and costs;
+- Ship Date not earlier than Order Date;
+- Revenue = Units Sold × Unit Price;
+- Cost = Units Sold × Unit Cost;
+- Profit = Revenue − Cost;
+- unique primary and surrogate keys;
+- non-null foreign keys;
+- zero orphan dimension references;
+- unique product-month budget grain;
+- reconciled source, exported, Delta, SQL, semantic-model, and report totals.
+
+> [!IMPORTANT]
+> A critical validation failure is a stop condition. Dependent processing should not continue until the failed control is understood and corrected.
 
 ---
 
 ## Dimensional and budget model
 
-The model contains two fact tables and five shared dimensions.
+The analytical layer contains two fact tables and five shared dimensions.
 
 | Table | Grain | Rows |
 |---|---|---:|
@@ -209,14 +148,16 @@ flowchart LR
 
 ### Budget assumptions
 
-| Budget metric | Growth factor |
+Budget rows are generated from prior-year product-month actuals.
+
+| Metric | Growth factor |
 |---|---:|
 | Units | 1.03 |
 | Revenue | 1.05 |
 | Cost | 1.04 |
 | Profit | Budget Revenue minus Budget Cost |
 
-Budget rows are generated from prior-year product-month actuals. Budget comparisons begin in 2011 because 2010 is the prior-year baseline. September 2020 is an incomplete month and is excluded from the executive trend where appropriate.
+Budget comparisons begin in 2011 because 2010 provides the prior-year baseline. September 2020 is an incomplete reporting month and is excluded where a complete-period comparison is required.
 
 ---
 
@@ -225,43 +166,51 @@ Budget rows are generated from prior-year product-month actuals. Budget comparis
 ```mermaid
 flowchart LR
     A[5m Sales CSV] --> B[Google Colab and DuckDB]
-    B --> C[Profiling and Deduplication]
-    C --> D[Star Schema and Budget]
+    B --> C[Profiling and Exact Deduplication]
+    C --> D[Star Schema and Product-Month Budget]
     D --> E[Seven Analytical CSV Files]
     E --> F[OneDrive]
     F --> G[Fabric Copy Job]
     G --> H[Lakehouse Delta Tables]
     H --> I[PySpark Type Enforcement]
     I --> J[Direct Lake Semantic Model]
-    J --> K[Power BI Report]
-    K --> L[PBIR Report Automation]
-    M[Fabric Pipeline] --> G
-    M --> I
-    M --> N[Semantic Model Refresh]
-    H --> O[SSMS Validation]
-    J --> P[DAX Studio and Tabular Editor]
-    E --> Q[Python Validation]
-    L --> R[Fabric REST API]
-    M --> S[GitHub Integration]
+    J --> K[Executive Power BI Dashboard]
+
+    L[Fabric Data Pipeline] --> G
+    L --> I
+    L --> M[Semantic Model Refresh]
+
+    E --> N[Python Validation]
+    H --> O[SQL Endpoint Validation]
+    J --> P[DAX and Metadata Validation]
+
+    K --> Q[PBIR Report Designer Notebook]
+    Q --> R[Fabric REST API]
+    R --> S[Stored Definition Verification]
+
+    J --> T[Semantic Model Audit Notebook]
+    T --> U[Semantic Model Health Model]
+    U --> V[Semantic Model Health Report]
 ```
 
 ---
 
 ## Microsoft Fabric implementation
 
-The `Sales Records Analytics` workspace contains:
+The repository contains ten version-controlled Microsoft Fabric item definitions:
 
-- `CopyJob_1`
-- `Fix_Sales_Records_Data_Types`
-- `Load_Sales_Records`
-- `Sales Records Model`
-- `SalesRecordsLakehouse`
-- `Global Sales Performance Dashboard`
-- `GlobalSalesReport_Designer`
+1. `Audit_Sales_Records_Semantic_Model.Notebook`
+2. `CopyJob_1.CopyJob`
+3. `Fix_Sales_Records_Data_Types.Notebook`
+4. `Global Sales Performance Dashboard.Report`
+5. `GlobalSalesReport_Designer.Notebook`
+6. `Load_Sales_Records.DataPipeline`
+7. `Sales Records Model.SemanticModel`
+8. `SalesRecordsLakehouse.Lakehouse`
+9. `Semantic Model Health Report.Report`
+10. `Semantic Model Health.SemanticModel`
 
-![Microsoft Fabric workspace](docs/images/01_fabric_workspace.png)
-
-### Automated pipeline
+### Orchestration sequence
 
 ```text
 Copy Job
@@ -271,11 +220,13 @@ Data-Type Enforcement Notebook
 Semantic Model Refresh
 ```
 
-The Copy Job uses `Full copy + Overwrite`, preventing duplicate appends during repeated runs. The type-enforcement notebook executes only after a successful copy, and semantic-model refresh executes only after successful schema validation.
+The Copy Job uses `Full copy + Overwrite`, preventing duplicate appends during repeated executions. The semantic model is refreshed only after loading and type enforcement complete successfully.
 
 ![Microsoft Fabric pipeline](docs/images/02_fabric_pipeline.png)
 
-### Data-type enforcement
+### Explicit type enforcement
+
+CSV does not preserve physical data types. The post-copy notebook therefore enforces the analytical contract before refresh.
 
 | Column category | Target type |
 |---|---|
@@ -292,64 +243,89 @@ The Copy Job uses `Full copy + Overwrite`, preventing duplicate appends during r
 
 ## Direct Lake semantic model
 
-The semantic model uses Direct Lake over Delta tables in OneLake and includes:
+`Sales Records Model` runs in Direct Lake mode over Delta tables in OneLake.
 
-- two fact tables,
-- five dimensions,
-- seven active relationships,
-- one inactive ship-date relationship,
-- a marked Date table,
-- chronological sort rules,
-- a dedicated `_Measures` table,
+The semantic layer includes:
+
+- two fact tables and five dimensions;
+- seven active relationships;
+- one inactive Ship Date relationship;
+- a marked Date table;
+- chronological sort rules;
+- a dedicated `_Measures` table;
 - Sales, Budget, Shipping, and Variance display folders.
 
 Core measures include:
 
-- Total Revenue
-- Total Cost
-- Total Profit
-- Profit Margin %
-- Units Sold
-- Order Count
-- Average Order Value
-- Average Delivery Days
-- Revenue by Ship Date
-- Budget Revenue, Cost, Profit, and Units
-- Revenue and Profit Variance
-- Revenue and Profit Budget Attainment %
+- Total Revenue, Cost, and Profit;
+- Profit Margin %;
+- Units Sold and Order Count;
+- Average Order Value and Average Delivery Days;
+- Revenue by Ship Date;
+- Budget Revenue, Cost, Profit, and Units;
+- Revenue and Profit variances;
+- Budget attainment percentages.
+
+Centralizing the calculations in the semantic model avoids reproducing business logic independently in report visuals.
 
 ---
 
-## PBIR report automation
+## Global Sales Performance Dashboard
 
-`GlobalSalesReport_Designer` uses Python, PBIR JSON, and Microsoft Fabric REST APIs to inspect, validate, create, and update the report definition.
+`Global Sales Performance Dashboard` is a focused, single-page Power BI report connected to `Sales Records Model`.
+
+The PBIR definition confirms:
+
+- exactly **one report page**;
+- page name: **Executive Overview**;
+- active page ID: `ae63e334e13ceb673ebb`;
+- canvas size: **1280 × 720**;
+- display option: `FitToPage`;
+- **11 visual definition folders** on the page.
+
+The dashboard presents the executive analytical view through KPI cards, Actual-versus-Budget analysis, product rankings, regional contribution, and a Year filter.
+
+For the displayed 2019 selection:
+
+| KPI | Value |
+|---|---:|
+| Revenue | 260.84bn |
+| Profit | 76.96bn |
+| Profit Margin | 29.50% |
+| Revenue versus Budget | 95.24% |
+| Orders | 196K |
+
+![Executive Overview](docs/images/global-sales-performance-dashboard.png)
+
+The single-page design is intentional: it prioritizes the key decisions and comparisons without adding navigation or duplicating analytical content across multiple pages.
+
+---
+
+## PBIR and Fabric REST API automation
+
+`GlobalSalesReport_Designer` treats the report definition as a controlled deployment artifact rather than a collection of manual UI changes.
+
+### Workflow
 
 ```text
-Global Sales Performance Dashboard
-        |
-        v
-Get Report Definition
-        |
-        v
+Retrieve report definition
+        ↓
 Decode InlineBase64 PBIR parts
-        |
-        v
-Inspect pages and visual.json definitions
-        |
-        v
-Create validated in-memory changes
-        |
-        v
+        ↓
+Inspect pages and visual definitions
+        ↓
+Validate report paths, visual IDs, and model binding
+        ↓
+Build and validate changes in memory
+        ↓
 Update the complete report definition
-        |
-        v
-Poll the Fabric long-running operation
-        |
-        v
-Verify the stored report state
+        ↓
+Poll the long-running Fabric operation
+        ↓
+Retrieve and verify the stored report state
 ```
 
-The notebook uses:
+### API operations
 
 ```text
 POST /v1/workspaces/{workspaceId}/reports/{reportId}/getDefinition
@@ -358,66 +334,37 @@ GET  /v1/operations/{operationId}
 GET  /v1/operations/{operationId}/result
 ```
 
-Authentication is obtained without hardcoded credentials:
+Authentication is obtained from the Fabric notebook environment:
 
 ```python
 notebookutils.credentials.getToken("pbi")
 ```
 
-### Automated report-engineering capabilities
+No access token, username, password, or client secret is hardcoded.
 
-- report and page inventory
-- semantic-model binding validation
-- exact visual positioning on a 12-pixel grid
-- structural field and measure assignment
-- dropdown slicer configuration
-- Actual-versus-Budget line chart generation
-- Top 5 product rankings
-- percentage-display correction
-- incomplete-period exclusion
-- validation of changed PBIR paths
-- long-running operation polling
-- preparation of `rollback_request_body`
+### Defensive controls
 
-The report-design notebook does not require a default Lakehouse because the notebook operates on the Power BI report definition.
+Before deployment, the notebook validates the current report structure and restricts the expected update scope. The workflow also prepares `rollback_request_body` from the pre-update definition, polls asynchronous operations, and checks the definition stored by Fabric after deployment.
+
+The rollback payload remains available only during the active notebook session unless it is explicitly persisted.
 
 ---
 
-## Validation strategy
+## Semantic-model health solution
 
-### Source controls
+The repository separates business reporting from semantic-model inspection through:
 
-- expected schema and row count
-- required-field checks
-- duplicate Order ID analysis
-- exact duplicate detection
-- conflicting transaction detection
+- `Audit_Sales_Records_Semantic_Model.Notebook`;
+- `Semantic Model Health.SemanticModel`;
+- `Semantic Model Health Report.Report`.
 
-### Business-rule controls
+This provides a dedicated analytical surface for model inventory and health results instead of mixing governance information into the business dashboard.
 
-- Ship Date is not earlier than Order Date
-- Units Sold is positive
-- price and cost values are nonnegative
-- Revenue equals Units Sold multiplied by Unit Price
-- Cost equals Units Sold multiplied by Unit Cost
-- Profit equals Revenue minus Cost
+![Semantic Model Health KPI Overview](docs/images/semantic-model-health-kpi-overview.png)
 
-### Model and report controls
+![Semantic Model Health Model Inventory](docs/images/semantic-model-health-model-inventory.png)
 
-- unique primary and surrogate keys
-- non-null foreign keys
-- zero orphan dimension references
-- unique product-month budget grain
-- reconciled source and destination row counts
-- expected semantic fields and measures
-- expected PBIR visual IDs and paths
-- approved report positions and dimensions
-- preserved semantic-model binding
-- restricted update scope before deployment
-
-```text
-Do not continue when a critical validation returns FAIL.
-```
+The health solution complements external inspection with DAX Studio, Tabular Editor, and SQL tools. It does not replace those tools.
 
 ---
 
@@ -458,23 +405,65 @@ Do not continue when a critical validation returns FAIL.
 | Profit variance % | 2.17% |
 | Profit budget attainment | 102.17% |
 
-### Cross-tool validation
+---
+
+## Cross-tool validation
 
 ```text
-Google Colab                  PASS
-DuckDB                        PASS
-Fabric Copy Job               PASS
-Fabric Notebook               PASS
-Fabric SQL Analytics Endpoint PASS
-Semantic Model Refresh        PASS
-DAX Query View                PASS
-DAX Studio                    PASS
-SQL Server Management Studio  PASS
-Visual Studio Code / Python   PASS
-Tabular Editor BPA            PASS
-PBIR Report Validation        PASS
-Fabric REST API Deployment    PASS
+Google Colab                    PASS
+DuckDB                          PASS
+Fabric Copy Job                 PASS
+Fabric Notebook                 PASS
+Fabric SQL Analytics Endpoint   PASS
+Semantic Model Refresh          PASS
+DAX Query View                  PASS
+DAX Studio                      PASS
+SQL Server Management Studio    PASS
+Visual Studio Code / Python     PASS
+Tabular Editor BPA              PASS
+PBIR Report Validation          PASS
+Fabric REST API Deployment      PASS
 ```
+
+The purpose of this cross-tool approach is not to maximize the number of technologies used. It is to reduce the risk of validating a result only within the engine that produced it.
+
+---
+
+## Engineering practices
+
+| Practice | Implementation |
+|---|---|
+| Raw-data preservation | Original source remains unchanged |
+| Exact deduplication | Only identical complete rows are removed |
+| Idempotent ingestion | Full copy with overwrite prevents duplicate appends |
+| Explicit data contract | Required schema, data types, keys, grains, and totals are checked |
+| Fail-fast execution | Critical validation failures stop dependent processing |
+| Separation of concerns | Ingestion, typing, modeling, reporting, audit, and deployment remain separate |
+| Independent reconciliation | Python, DuckDB, SQL, DAX, and report outputs are compared |
+| Secure notebook authentication | Fabric-issued token is used instead of hardcoded credentials |
+| Controlled PBIR update | Expected paths, IDs, binding, and update scope are validated |
+| Post-deployment verification | Stored report definition is checked after the API operation |
+| Rollback preparation | Pre-update definition is retained in memory as a rollback payload |
+| Version control | Supported Fabric definitions are stored through native Git integration |
+| Transparent limitations | Implemented and non-implemented capabilities are clearly separated |
+
+---
+
+## Repository inventory
+
+| Component | Count |
+|---|---:|
+| Microsoft Fabric item definitions | 10 |
+| Notebooks | 3 |
+| Power BI reports | 2 |
+| Semantic models | 2 |
+| Data pipelines | 1 |
+| Copy Jobs | 1 |
+| Lakehouses | 1 |
+| PNG documentation images | 9 |
+| PowerPoint presentations | 1 |
+
+The total number of physical files is intentionally not hardcoded. Fabric-managed folders contain generated metadata whose file count can change after synchronization even when the logical solution inventory remains unchanged.
 
 ---
 
@@ -482,6 +471,7 @@ Fabric REST API Deployment    PASS
 
 ```text
 .
+├── Audit_Sales_Records_Semantic_Model.Notebook/
 ├── CopyJob_1.CopyJob/
 ├── Fix_Sales_Records_Data_Types.Notebook/
 ├── Global Sales Performance Dashboard.Report/
@@ -489,17 +479,23 @@ Fabric REST API Deployment    PASS
 ├── Load_Sales_Records.DataPipeline/
 ├── Sales Records Model.SemanticModel/
 ├── SalesRecordsLakehouse.Lakehouse/
+├── Semantic Model Health Report.Report/
+├── Semantic Model Health.SemanticModel/
 ├── docs/
 │   └── images/
+│       ├── .gitkeep
 │       ├── 01_fabric_workspace.png
 │       ├── 02_fabric_pipeline.png
 │       ├── 03_ssms_sql_endpoint.png
 │       ├── 04_dax_studio.png
 │       ├── 05_tabular_editor.png
 │       ├── 06_visual_studio_code.png
-│       └── global-sales-performance-dashboard.png
+│       ├── global-sales-performance-dashboard.png
+│       ├── semantic-model-health-kpi-overview.png
+│       └── semantic-model-health-model-inventory.png
 ├── LICENSE
-└── README.md
+├── README.md
+└── Sales-Records-Fabric-Analytics-Presentation.pptx
 ```
 
 ---
@@ -507,79 +503,114 @@ Fabric REST API Deployment    PASS
 ## Reproduction workflow
 
 1. Download the synthetic 5m Sales Records dataset.
-2. Profile and deduplicate the data with Google Colab and DuckDB.
-3. Build the facts and dimensions.
-4. Generate the product-month budget.
-5. Validate keys, relationships, formulas, and totals.
-6. Export seven analytical CSV files.
-7. Upload the files to the OneDrive `sales-records` folder.
-8. Create the Fabric workspace and Lakehouse.
-9. Configure the Copy Job with `Full copy + Overwrite`.
-10. Run the type-enforcement notebook.
-11. Refresh the Direct Lake semantic model.
-12. Validate SQL, Python, and DAX results.
-13. Create `Global Sales Performance Dashboard` from `Sales Records Model`.
-14. Run `GlobalSalesReport_Designer` for validated PBIR deployment.
-15. Verify Executive Overview values, filters, rankings, and Actual-versus-Budget trend.
-16. Commit supported Fabric definitions through native Git integration.
+2. Preserve the original source without modification.
+3. Profile all rows with Google Colab and DuckDB.
+4. Distinguish exact duplicates from conflicting records.
+5. Remove exact duplicates only.
+6. Standardize column names and apply explicit data types.
+7. Create surrogate keys, facts, and dimensions.
+8. Generate the product-month budget.
+9. Validate keys, grains, formulas, relationships, and totals.
+10. Export the seven analytical CSV files.
+11. Upload the files to the OneDrive `sales-records` folder.
+12. Create the Fabric workspace and Lakehouse.
+13. Configure the Copy Job with `Full copy + Overwrite`.
+14. Run the type-enforcement notebook.
+15. Refresh and validate the Direct Lake semantic model.
+16. Validate results through SQL, Python, and DAX.
+17. Deploy and verify the Executive Overview through the PBIR notebook.
+18. Run the semantic-model audit and refresh the health solution.
+19. Commit supported Fabric definitions through native Git integration.
+
+Connections, credentials, capacity assignments, and private environment settings must be recreated outside Git.
+
+---
+
+## How to use this repository
+
+### Architecture reference
+
+Use the repository to review an end-to-end Fabric path:
+
+```text
+Source profiling
+→ dimensional transformation
+→ Fabric ingestion
+→ Delta storage
+→ Direct Lake
+→ semantic model
+→ Power BI
+→ PBIR automation
+→ semantic-model health reporting
+```
+
+### PBIR automation reference
+
+Use `GlobalSalesReport_Designer.Notebook` as an implementation reference for retrieving, decoding, validating, updating, polling, and verifying Fabric report definitions.
+
+### Data-quality reference
+
+Reuse the validation pattern by replacing the expected schema, business rules, model grains, key definitions, and reconciliation totals for another source.
+
+### Portfolio and technical-review evidence
+
+Use the code, model definitions, screenshots, and presentation to discuss concrete design choices such as exact deduplication, overwrite-based ingestion, Direct Lake modeling, inactive date relationships, safe API updates, and independent reconciliation.
 
 ---
 
 ## Operational considerations
 
-The source remains CSV-based for portability. Because CSV does not preserve physical types, the pipeline must maintain this sequence:
+- CSV files do not preserve physical types, so the sequence `Copy → Type Enforcement → Validation → Refresh` is required.
+- Fabric can update generated metadata during Git synchronization; all changes should be reviewed before merge.
+- PBIR schemas can evolve between Power BI versions; automation must validate current paths and structures.
+- Fabric report-definition updates can be asynchronous; clients must poll the operation status.
+- The prepared rollback payload should be persisted securely for a production deployment process.
+- OneLake data, credentials, and private connections are not stored in Git.
+- Trial-capacity performance should not be treated as a production-capacity benchmark.
 
-```text
-Copy Job → Type-Enforcement Notebook → Semantic Model Refresh
-```
+---
 
-The PBIR notebook must validate the current report schema, visual IDs, paths, and semantic-model binding before applying updates. The in-memory rollback payload remains available only during the active notebook session unless explicitly persisted.
+## Limitations
+
+- The source is synthetic.
+- Budget values use predefined prior-year growth assumptions.
+- Budget is maintained at product-month grain only.
+- Geography and channel budget allocation are outside the current scope.
+- September 2020 is an incomplete reporting period.
+- The business dashboard contains one Executive Overview page.
+- CSV files require post-ingestion type enforcement.
+- The project was developed with Microsoft Fabric Trial capacity.
+- Git stores supported definitions, not OneLake data.
+- Credentials and private connections must be recreated after deployment.
+- PBIR structures may change between schema versions.
+- The rollback request is not persisted automatically.
+- Deployment pipelines and automated CI/CD validation are outside the current scope.
 
 ---
 
 ## Skills demonstrated
 
 - Microsoft Fabric, OneLake, Lakehouse, and Delta Lake
-- Data Factory Pipeline and Copy Job
-- Fabric Notebook and PySpark
-- Direct Lake and Power BI semantic modeling
-- DAX and TMDL
-- Power BI Project format and PBIR JSON
+- Fabric Data Factory, Copy Job, Data Pipeline, and Notebook
+- PySpark schema enforcement
+- Direct Lake semantic modeling
+- Dimensional modeling and product-month budgeting
+- DAX, TMDL, and inactive relationships
+- Power BI Project and PBIR JSON
 - Microsoft Fabric REST APIs
 - Python report-definition automation
-- validation-driven report deployment
-- SQL and SQL Analytics Endpoint
-- Python, DuckDB, and Google Colab
-- DAX Studio, Tabular Editor, and Best Practice Analyzer
-- SQL Server Management Studio and Visual Studio Code
-- XMLA endpoint integration
-- GitHub integration and technical documentation
-- dimensional modeling and Actual-versus-Budget analysis
-- data-quality engineering and cross-engine reconciliation
-
----
-
-## Limitations
-
-- The source is synthetic and does not represent real commercial activity.
-- Budget values use predefined prior-year growth assumptions.
-- Budget is maintained only at product-month granularity.
-- Geography and channel budget allocation are outside the current scope.
-- September 2020 is an incomplete reporting month.
-- CSV files do not preserve physical data types.
-- The project was developed with Microsoft Fabric Trial capacity.
-- Git stores supported definitions, not OneLake data.
-- Credentials and private connections must be recreated after deployment.
-- PBIR visual structures can change between Power BI schema versions.
-- Deployment pipelines and automated CI/CD validation are outside the current scope.
+- Semantic-model auditing and health reporting
+- DuckDB, SQL, and cross-engine reconciliation
+- DAX Studio, Tabular Editor, SSMS, and Visual Studio Code
+- Native Fabric Git integration and technical documentation
 
 ---
 
 ## Project presentation
 
-<img width="1152" height="647" alt="image" src="https://github.com/user-attachments/assets/e82b1ff6-8ac3-48c0-b09e-f173707ce626" />
-
 [Download the project presentation](Sales-Records-Fabric-Analytics-Presentation.pptx)
+
+---
 
 ## License
 
