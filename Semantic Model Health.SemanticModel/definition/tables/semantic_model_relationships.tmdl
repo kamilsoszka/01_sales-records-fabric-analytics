@@ -1,0 +1,130 @@
+table semantic_model_relationships
+	lineageTag: 10ad280a-b9e8-4287-90ca-2255da428b02
+	sourceLineageTag: [dbo].[semantic_model_relationships]
+
+	column audit_timestamp_utc
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 8cc166e0-b1c4-4e11-a67f-b05b85e8227d
+		sourceLineageTag: audit_timestamp_utc
+		summarizeBy: none
+		sourceColumn: audit_timestamp_utc
+
+		annotation SummarizationSetBy = Automatic
+
+	column workspace_name
+		dataType: string
+		lineageTag: 8102d1da-2580-4da1-9b2b-6b68250c48e9
+		sourceLineageTag: workspace_name
+		summarizeBy: none
+		sourceColumn: workspace_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column semantic_model_name
+		dataType: string
+		lineageTag: 48a20f64-1213-4d1a-a2a0-ebc568cbd3f6
+		sourceLineageTag: semantic_model_name
+		summarizeBy: none
+		sourceColumn: semantic_model_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column relationship_name
+		dataType: string
+		lineageTag: 3ca2e0ff-0af2-41c1-b2ab-51fade0fc1af
+		sourceLineageTag: relationship_name
+		summarizeBy: none
+		sourceColumn: relationship_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column from_table
+		dataType: string
+		lineageTag: ba508481-9fe7-4a08-987e-638d1ea5fdb3
+		sourceLineageTag: from_table
+		summarizeBy: none
+		sourceColumn: from_table
+
+		annotation SummarizationSetBy = Automatic
+
+	column from_column
+		dataType: string
+		lineageTag: b8c213e9-a491-4b52-a409-5d378c077926
+		sourceLineageTag: from_column
+		summarizeBy: none
+		sourceColumn: from_column
+
+		annotation SummarizationSetBy = Automatic
+
+	column to_table
+		dataType: string
+		lineageTag: 5bf42870-245c-4ba5-b0d7-1d58a3d1b32a
+		sourceLineageTag: to_table
+		summarizeBy: none
+		sourceColumn: to_table
+
+		annotation SummarizationSetBy = Automatic
+
+	column to_column
+		dataType: string
+		lineageTag: 23f4bf54-52b7-4fef-941a-64a6de8e3a1f
+		sourceLineageTag: to_column
+		summarizeBy: none
+		sourceColumn: to_column
+
+		annotation SummarizationSetBy = Automatic
+
+	column from_cardinality
+		dataType: string
+		lineageTag: fddc1f4a-a249-4d02-b07d-3cb8ee27ce3c
+		sourceLineageTag: from_cardinality
+		summarizeBy: none
+		sourceColumn: from_cardinality
+
+		annotation SummarizationSetBy = Automatic
+
+	column to_cardinality
+		dataType: string
+		lineageTag: 1063c632-c69b-4a3b-b16d-d0181c7024cc
+		sourceLineageTag: to_cardinality
+		summarizeBy: none
+		sourceColumn: to_cardinality
+
+		annotation SummarizationSetBy = Automatic
+
+	column cross_filtering_behavior
+		dataType: string
+		lineageTag: f255461b-685c-4bee-a216-bb396c0ea206
+		sourceLineageTag: cross_filtering_behavior
+		summarizeBy: none
+		sourceColumn: cross_filtering_behavior
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_active
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 34b06d05-483a-498d-86cf-7c083192e1b7
+		sourceLineageTag: is_active
+		summarizeBy: none
+		sourceColumn: is_active
+
+		annotation SummarizationSetBy = Automatic
+
+	column status
+		dataType: string
+		lineageTag: 80f4d1e6-45b9-475a-b78f-65273963b99f
+		sourceLineageTag: status
+		summarizeBy: none
+		sourceColumn: status
+
+		annotation SummarizationSetBy = Automatic
+
+	partition semantic_model_relationships = entity
+		mode: directLake
+		source
+			entityName: semantic_model_relationships
+			schemaName: dbo
+			expressionSource: 'DirectLake - SalesRecordsLakehouse'
+

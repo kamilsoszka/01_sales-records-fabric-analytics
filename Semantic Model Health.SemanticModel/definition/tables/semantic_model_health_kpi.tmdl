@@ -1,0 +1,153 @@
+table semantic_model_health_kpi
+	lineageTag: 8d4d4f6f-6744-40f2-8084-2c7488cc30e3
+	sourceLineageTag: [dbo].[semantic_model_health_kpi]
+
+	measure 'KPI Tables' = CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Tables")
+		formatString: #,0
+		lineageTag: 43153ef6-dcd5-4cf0-973a-706b34d3861f
+
+	measure 'KPI Fact Tables' = CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Fact Tables")
+		formatString: #,0
+		lineageTag: f71aa405-74d2-4b71-a68e-19f3a144bc3a
+
+	measure 'KPI Dimension Tables' = CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Dimension Tables")
+		formatString: #,0
+		lineageTag: 91462012-9a73-4658-a91d-5f855e8280c7
+
+	measure 'KPI Columns' = CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Columns")
+		formatString: #,0
+		lineageTag: 237c80ba-7dc9-4590-b29b-0b704f28068e
+
+	measure 'KPI Measures' = CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Measures")
+		formatString: #,0
+		lineageTag: b8abee30-0e64-4011-9943-e4b2c5105288
+
+	measure 'KPI Relationships' = CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Relationships")
+		formatString: #,0
+		lineageTag: 6ed540f9-9806-4ced-b083-ec38647c5531
+
+	measure 'KPI Active Relationships' = CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Active Relationships")
+		formatString: #,0
+		lineageTag: 76848520-a929-4be1-b249-a0525a47afef
+
+	measure 'KPI Total Model Rows' = FORMAT(CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Total Model Rows"), "#,0")
+		lineageTag: 63088ae0-65c1-4c3c-aef8-8a1507f04209
+
+	measure 'KPI Documentation Completeness' = CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Documentation Completeness")
+		formatString: 0.00%
+		lineageTag: bffe8bd3-c431-4773-bb82-94bfca06d0a8
+
+	measure 'KPI Measure Errors' = CALCULATE(MAX('semantic_model_health_kpi'[kpi_value]), 'semantic_model_health_kpi'[kpi_name] = "Measure Errors")
+		formatString: #,0
+		lineageTag: f9759eda-ee68-4d55-ae1b-4f56028462c6
+
+	column audit_timestamp_utc
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 5c508b80-18bf-4b8c-b1ae-9687003eef6a
+		sourceLineageTag: audit_timestamp_utc
+		summarizeBy: none
+		sourceColumn: audit_timestamp_utc
+
+		annotation SummarizationSetBy = Automatic
+
+	column workspace_name
+		dataType: string
+		lineageTag: 46741df0-2689-4677-a5b4-eea30894cb73
+		sourceLineageTag: workspace_name
+		summarizeBy: none
+		sourceColumn: workspace_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column semantic_model_name
+		dataType: string
+		lineageTag: 1c1bee05-cb1a-4969-911f-66561428fd71
+		sourceLineageTag: semantic_model_name
+		summarizeBy: none
+		sourceColumn: semantic_model_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column kpi_order
+		dataType: int64
+		formatString: 0
+		lineageTag: c307d3b1-c3d3-41bf-abd5-ca753a28be8d
+		sourceLineageTag: kpi_order
+		summarizeBy: sum
+		sourceColumn: kpi_order
+
+		annotation SummarizationSetBy = Automatic
+
+	column kpi_name
+		dataType: string
+		lineageTag: ea7b357b-97c5-4023-ae23-a32819e89dd8
+		sourceLineageTag: kpi_name
+		summarizeBy: none
+		sourceColumn: kpi_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column kpi_value
+		dataType: double
+		lineageTag: a4849b44-53fe-402e-920f-5ba512dd713c
+		sourceLineageTag: kpi_value
+		summarizeBy: sum
+		sourceColumn: kpi_value
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column kpi_value_text
+		dataType: string
+		lineageTag: ae90cf81-5267-4273-bdc2-0cb8895d0398
+		sourceLineageTag: kpi_value_text
+		summarizeBy: none
+		sourceColumn: kpi_value_text
+
+		annotation SummarizationSetBy = Automatic
+
+	column status
+		dataType: string
+		lineageTag: 50e23c60-9ebb-4b80-90e4-fa875fe68b69
+		sourceLineageTag: status
+		summarizeBy: none
+		sourceColumn: status
+
+		annotation SummarizationSetBy = Automatic
+
+	column target
+		dataType: string
+		lineageTag: 3c51b8b0-14a6-4889-ab6e-0a0644c99f3e
+		sourceLineageTag: target
+		summarizeBy: none
+		sourceColumn: target
+
+		annotation SummarizationSetBy = Automatic
+
+	column description
+		dataType: string
+		lineageTag: 3ece6c23-9ebe-4790-98c9-c931449e753a
+		sourceLineageTag: description
+		summarizeBy: none
+		sourceColumn: description
+
+		annotation SummarizationSetBy = Automatic
+
+	column report_group
+		dataType: string
+		lineageTag: 20afcf81-4f81-4dd3-b1a8-842cc55afc35
+		sourceLineageTag: report_group
+		summarizeBy: none
+		sourceColumn: report_group
+
+		annotation SummarizationSetBy = Automatic
+
+	partition semantic_model_health_kpi = entity
+		mode: directLake
+		source
+			entityName: semantic_model_health_kpi
+			schemaName: dbo
+			expressionSource: 'DirectLake - SalesRecordsLakehouse'
+

@@ -1,0 +1,225 @@
+table semantic_model_inventory
+	lineageTag: aa772a8f-e6ea-4282-bed9-e7ae2c8bbb2f
+	sourceLineageTag: [dbo].[semantic_model_inventory]
+
+	column audit_timestamp_utc
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 9538f04c-5086-4372-a006-9607e49faae2
+		sourceLineageTag: audit_timestamp_utc
+		summarizeBy: none
+		sourceColumn: audit_timestamp_utc
+
+		annotation SummarizationSetBy = Automatic
+
+	column workspace_name
+		dataType: string
+		lineageTag: ec197fae-a48c-4fe7-baf7-f3b77b5100e4
+		sourceLineageTag: workspace_name
+		summarizeBy: none
+		sourceColumn: workspace_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column semantic_model_name
+		dataType: string
+		lineageTag: 82434da7-be46-4a45-8ee6-32bb2b322cd0
+		sourceLineageTag: semantic_model_name
+		summarizeBy: none
+		sourceColumn: semantic_model_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column object_type
+		dataType: string
+		lineageTag: 9fcf7df0-c3c8-4b57-828a-3944eea132fe
+		sourceLineageTag: object_type
+		summarizeBy: none
+		sourceColumn: object_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column object_name
+		dataType: string
+		lineageTag: 92d3aa32-89b4-4b7e-8d5d-fbf97afb57e8
+		sourceLineageTag: object_name
+		summarizeBy: none
+		sourceColumn: object_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column parent_table
+		dataType: string
+		lineageTag: 2b650f36-f646-4090-8051-74e6f9760c9d
+		sourceLineageTag: parent_table
+		summarizeBy: none
+		sourceColumn: parent_table
+
+		annotation SummarizationSetBy = Automatic
+
+	column table_role
+		dataType: string
+		lineageTag: 653946dc-c779-4f39-b775-8cade7a1bbfd
+		sourceLineageTag: table_role
+		summarizeBy: none
+		sourceColumn: table_role
+
+		annotation SummarizationSetBy = Automatic
+
+	column row_count
+		dataType: int64
+		formatString: 0
+		lineageTag: 23c29a53-af93-4a7b-bee9-a0ff5eb4f930
+		sourceLineageTag: row_count
+		summarizeBy: sum
+		sourceColumn: row_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column data_type
+		dataType: string
+		lineageTag: c2ffeaae-f9ea-45e8-a273-fc805fa4cbf2
+		sourceLineageTag: data_type
+		summarizeBy: none
+		sourceColumn: data_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column storage_mode
+		dataType: string
+		lineageTag: be757184-030f-4303-85a5-54abe3fa06b4
+		sourceLineageTag: storage_mode
+		summarizeBy: none
+		sourceColumn: storage_mode
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_hidden
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 89d8b4d3-e873-4286-9ba0-cca251393f2f
+		sourceLineageTag: is_hidden
+		summarizeBy: none
+		sourceColumn: is_hidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_visible
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 808c8c4d-dc92-4b62-a76e-49e3ad5eb5a5
+		sourceLineageTag: is_visible
+		summarizeBy: none
+		sourceColumn: is_visible
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_key
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 65de700d-ed83-4886-9600-2bc7a3e05c7a
+		sourceLineageTag: is_key
+		summarizeBy: none
+		sourceColumn: is_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_unique
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: af697b65-7e21-4efc-b3db-c5b1918627c9
+		sourceLineageTag: is_unique
+		summarizeBy: none
+		sourceColumn: is_unique
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_active
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 38b27c19-bd59-41ae-a922-a2e5e12462a3
+		sourceLineageTag: is_active
+		summarizeBy: none
+		sourceColumn: is_active
+
+		annotation SummarizationSetBy = Automatic
+
+	column description
+		dataType: string
+		lineageTag: d35bee19-4f7b-4dda-a207-6f22af258015
+		sourceLineageTag: description
+		summarizeBy: none
+		sourceColumn: description
+
+		annotation SummarizationSetBy = Automatic
+
+	column expression
+		dataType: string
+		lineageTag: 7a96d5c6-da0d-4898-b94a-e9bf68c7598c
+		sourceLineageTag: expression
+		summarizeBy: none
+		sourceColumn: expression
+
+		annotation SummarizationSetBy = Automatic
+
+	column format_string
+		dataType: string
+		lineageTag: e2dd979d-a0a6-422d-b9d1-28f14b8fea0f
+		sourceLineageTag: format_string
+		summarizeBy: none
+		sourceColumn: format_string
+
+		annotation SummarizationSetBy = Automatic
+
+	column display_folder
+		dataType: string
+		lineageTag: ee949a33-4794-4261-a8dd-88d5298299c0
+		sourceLineageTag: display_folder
+		summarizeBy: none
+		sourceColumn: display_folder
+
+		annotation SummarizationSetBy = Automatic
+
+	column data_category
+		dataType: string
+		lineageTag: bfd58b56-3617-4efb-9550-945b20581eef
+		sourceLineageTag: data_category
+		summarizeBy: none
+		sourceColumn: data_category
+
+		annotation SummarizationSetBy = Automatic
+
+	column state
+		dataType: string
+		lineageTag: 55e904ac-c153-4c2d-b11f-9bf7a57bb4dd
+		sourceLineageTag: state
+		summarizeBy: none
+		sourceColumn: state
+
+		annotation SummarizationSetBy = Automatic
+
+	column status
+		dataType: string
+		lineageTag: 6fcc8e79-be1e-4201-9fbb-6b4bc371bf71
+		sourceLineageTag: status
+		summarizeBy: none
+		sourceColumn: status
+
+		annotation SummarizationSetBy = Automatic
+
+	column possible_use
+		dataType: string
+		lineageTag: 54f90e6d-936e-46ab-b7fa-a40b69d14611
+		sourceLineageTag: possible_use
+		summarizeBy: none
+		sourceColumn: possible_use
+
+		annotation SummarizationSetBy = Automatic
+
+	partition semantic_model_inventory = entity
+		mode: directLake
+		source
+			entityName: semantic_model_inventory
+			schemaName: dbo
+			expressionSource: 'DirectLake - SalesRecordsLakehouse'
+

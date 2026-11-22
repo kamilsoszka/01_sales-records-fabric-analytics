@@ -1,0 +1,57 @@
+table semantic_model_audit_log
+	lineageTag: a60f38a1-b7d1-495d-a56b-124e1e1eed55
+	sourceLineageTag: [dbo].[semantic_model_audit_log]
+
+	column audit_timestamp_utc
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: d0e41b64-97e8-42cf-b99e-96aced514473
+		sourceLineageTag: audit_timestamp_utc
+		summarizeBy: none
+		sourceColumn: audit_timestamp_utc
+
+		annotation SummarizationSetBy = Automatic
+
+	column audit_area
+		dataType: string
+		lineageTag: 13b71b2c-3d6d-48ed-8cef-1a5bdf9b192a
+		sourceLineageTag: audit_area
+		summarizeBy: none
+		sourceColumn: audit_area
+
+		annotation SummarizationSetBy = Automatic
+
+	column object_name
+		dataType: string
+		lineageTag: 7a8d3ea4-c610-4d3d-8961-24ecd58d0700
+		sourceLineageTag: object_name
+		summarizeBy: none
+		sourceColumn: object_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column status
+		dataType: string
+		lineageTag: 2836b4bb-f1c3-449d-a4fb-0d396ba200ca
+		sourceLineageTag: status
+		summarizeBy: none
+		sourceColumn: status
+
+		annotation SummarizationSetBy = Automatic
+
+	column details
+		dataType: string
+		lineageTag: 93772781-8bdd-4be6-baba-12885e36c90c
+		sourceLineageTag: details
+		summarizeBy: none
+		sourceColumn: details
+
+		annotation SummarizationSetBy = Automatic
+
+	partition semantic_model_audit_log = entity
+		mode: directLake
+		source
+			entityName: semantic_model_audit_log
+			schemaName: dbo
+			expressionSource: 'DirectLake - SalesRecordsLakehouse'
+
