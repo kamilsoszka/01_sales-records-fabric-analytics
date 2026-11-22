@@ -4587,3 +4587,2293 @@ print("Semantic model changed: No")
 # META   "language": "python",
 # META   "language_group": "synapse_pyspark"
 # META }
+
+# CELL ********************
+
+import base64
+import json
+import re
+import time
+from collections import Counter
+
+import requests
+import notebookutils
+
+REPORT_NAME = "Global Sales Performance Dashboard"
+SEMANTIC_MODEL_NAME = "Sales Records Model"
+API_BASE = "https://api.fabric.microsoft.com/v1"
+TIMEOUT_SECONDS = 120
+MAX_WAIT_SECONDS = 600
+
+
+def context_value(context, name):
+    if isinstance(context, dict):
+        return context.get(name)
+    return getattr(context, name, None)
+
+
+def headers():
+    token = notebookutils.credentials.getToken("pbi")
+    if not token:
+        raise RuntimeError("Fabric authentication token could not be obtained.")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+
+def raise_api_error(response):
+    if response.ok:
+        return
+    try:
+        body = response.json()
+    except ValueError:
+        body = response.text
+    raise RuntimeError(
+        f"Fabric API request failed.\n"
+        f"Status: {response.status_code}\n"
+        f"URL: {response.url}\n"
+        f"Response: {body}"
+    )
+
+
+def get_json(url, request_headers):
+    response = requests.get(
+        url,
+        headers=request_headers,
+        timeout=TIMEOUT_SECONDS,
+    )
+    raise_api_error(response)
+    return response.json()
+
+
+def post_and_wait(url, request_headers):
+    response = requests.post(
+        url,
+        headers=request_headers,
+        timeout=TIMEOUT_SECONDS,
+    )
+    raise_api_error(response)
+
+    if response.status_code == 200:
+        return response.json()
+
+    if response.status_code != 202:
+        raise RuntimeError(
+            f"Unexpected Fabric API status: {response.status_code}"
+        )
+
+    operation_location = response.headers.get("Location")
+    operation_id = response.headers.get("x-ms-operation-id")
+    retry_after = int(response.headers.get("Retry-After", "5"))
+
+    if not operation_location and operation_id:
+        operation_location = f"{API_BASE}/operations/{operation_id}"
+
+    if not operation_location:
+        raise RuntimeError(
+            "Fabric returned HTTP 202 without an operation location."
+        )
+
+    started_at = time.time()
+
+    while True:
+        if time.time() - started_at > MAX_WAIT_SECONDS:
+            raise TimeoutError(
+                "The Fabric long-running operation exceeded the wait limit."
+            )
+
+        time.sleep(max(retry_after, 1))
+
+        operation_response = requests.get(
+            operation_location,
+            headers=request_headers,
+            timeout=TIMEOUT_SECONDS,
+        )
+        raise_api_error(operation_response)
+        operation = operation_response.json()
+        status = str(operation.get("status", "")).lower()
+
+        if status in {"succeeded", "completed"}:
+            result_location = operation_response.headers.get("Location")
+            if not result_location:
+                result_location = f"{operation_location.rstrip('/')}/result"
+
+            result_response = requests.get(
+                result_location,
+                headers=request_headers,
+                timeout=TIMEOUT_SECONDS,
+            )
+            raise_api_error(result_response)
+            return result_response.json()
+
+        if status in {"failed", "cancelled", "canceled"}:
+            raise RuntimeError(
+                "Fabric long-running operation failed.\n"
+                + json.dumps(operation, indent=2)
+            )
+
+        retry_after = int(
+            operation_response.headers.get("Retry-After", "5")
+        )
+
+
+def list_workspace_items(workspace_id, request_headers):
+    url = f"{API_BASE}/workspaces/{workspace_id}/items"
+    items = []
+
+    while url:
+        payload = get_json(url, request_headers)
+        items.extend(payload.get("value", []))
+        url = payload.get("continuationUri")
+
+    return items
+
+
+def find_item(items, display_name, item_type):
+    matches = [
+        item
+        for item in items
+        if item.get("displayName") == display_name
+        and item.get("type") == item_type
+    ]
+
+    if len(matches) != 1:
+        available = "\n".join(
+            sorted(
+                f"{item.get('type')}: {item.get('displayName')}"
+                for item in items
+            )
+        )
+        raise RuntimeError(
+            f"Expected exactly one {item_type} named '{display_name}', "
+            f"but found {len(matches)}.\n\n"
+            f"Available workspace items:\n{available}"
+        )
+
+    return matches[0]
+
+
+def decode_parts(payload):
+    decoded = {}
+
+    for part in payload.get("definition", {}).get("parts", []):
+        path = part.get("path")
+        value = part.get("payload")
+        payload_type = part.get("payloadType")
+
+        if not path or value is None:
+            continue
+
+        if payload_type == "InlineBase64":
+            decoded[path] = base64.b64decode(value).decode(
+                "utf-8",
+                errors="replace",
+            )
+        else:
+            decoded[path] = str(value)
+
+    return decoded
+
+
+def load_json_part(parts, path):
+    if path not in parts:
+        raise KeyError(f"Expected definition part was not found: {path}")
+    return json.loads(parts[path])
+
+
+def find_first_value(node, key):
+    if isinstance(node, dict):
+        value = node.get(key)
+        if isinstance(value, str) and value:
+            return value
+        for child in node.values():
+            result = find_first_value(child, key)
+            if result:
+                return result
+    elif isinstance(node, list):
+        for child in node:
+            result = find_first_value(child, key)
+            if result:
+                return result
+    return ""
+
+
+def inventory_report(parts):
+    metadata = load_json_part(parts, "definition/pages/pages.json")
+    page_order = metadata.get("pageOrder", [])
+    active_page = metadata.get("activePageName")
+    pages = []
+    visuals = []
+
+    for page_id in page_order:
+        page_path = f"definition/pages/{page_id}/page.json"
+        page = load_json_part(parts, page_path)
+        page_name = page.get("displayName")
+
+        pages.append(
+            {
+                "id": page_id,
+                "name": page_name,
+                "width": page.get("width"),
+                "height": page.get("height"),
+                "display_option": page.get("displayOption"),
+                "active": page_id == active_page,
+            }
+        )
+
+        prefix = f"definition/pages/{page_id}/visuals/"
+
+        for path, content in sorted(parts.items()):
+            if not path.startswith(prefix) or not path.endswith("/visual.json"):
+                continue
+
+            definition = json.loads(content)
+            visual_id = path[len(prefix):].split("/", 1)[0]
+            position = definition.get("position", {})
+            visual_type = find_first_value(definition, "visualType") or "Unknown"
+
+            visuals.append(
+                {
+                    "page": page_name,
+                    "id": visual_id,
+                    "type": visual_type,
+                    "x": position.get("x"),
+                    "y": position.get("y"),
+                    "width": position.get("width"),
+                    "height": position.get("height"),
+                    "path": path,
+                }
+            )
+
+    return pages, visuals
+
+
+def parse_tmdl(parts):
+    tmdl = {
+        path: content
+        for path, content in parts.items()
+        if path.lower().endswith(".tmdl")
+    }
+
+    table_pattern = re.compile(r"(?m)^\s*table\s+'?([^'=\r\n]+)'?\s*$")
+    measure_pattern = re.compile(
+        r"(?m)^\s*measure\s+'([^']+)'\s*=|^\s*measure\s+([^=\r\n]+?)\s*="
+    )
+    column_pattern = re.compile(
+        r"(?m)^\s*column\s+'([^']+)'\s*$|^\s*column\s+([^\r\n]+?)\s*$"
+    )
+    relationship_pattern = re.compile(r"(?m)^\s*relationship\s+([^\r\n]+)")
+    calculation_group_pattern = re.compile(r"(?m)^\s*calculationGroup\b")
+    calculation_item_pattern = re.compile(
+        r"(?m)^\s*calculationItem\s+'?([^'=\r\n]+)'?"
+    )
+
+    tables = []
+    measures = []
+    columns = []
+    relationships = []
+    calculation_groups = []
+    calculation_items = []
+
+    for path, content in sorted(tmdl.items()):
+        found_tables = [name.strip() for name in table_pattern.findall(content)]
+        current_table = found_tables[0] if found_tables else ""
+        tables.extend(found_tables)
+
+        for match in measure_pattern.findall(content):
+            name = next(value.strip() for value in match if value.strip())
+            measures.append((current_table, name))
+
+        for match in column_pattern.findall(content):
+            name = next(value.strip() for value in match if value.strip())
+            columns.append((current_table, name))
+
+        relationships.extend(
+            name.strip() for name in relationship_pattern.findall(content)
+        )
+
+        if calculation_group_pattern.search(content):
+            calculation_groups.append(current_table or path)
+
+        for name in calculation_item_pattern.findall(content):
+            calculation_items.append((current_table or path, name.strip()))
+
+    return {
+        "part_count": len(tmdl),
+        "tables": sorted(set(tables)),
+        "measures": measures,
+        "columns": columns,
+        "relationships": relationships,
+        "calculation_groups": sorted(set(calculation_groups)),
+        "calculation_items": calculation_items,
+    }
+
+
+def section(title):
+    print("\n" + "=" * 80)
+    print(title)
+    print("=" * 80)
+
+
+context = notebookutils.runtime.context
+workspace_id = context_value(context, "currentWorkspaceId")
+workspace_name = context_value(context, "currentWorkspaceName")
+
+if not workspace_id:
+    raise RuntimeError("The current Fabric workspace ID could not be obtained.")
+
+request_headers = headers()
+items = list_workspace_items(workspace_id, request_headers)
+report = find_item(items, REPORT_NAME, "Report")
+model = find_item(items, SEMANTIC_MODEL_NAME, "SemanticModel")
+
+report_payload = post_and_wait(
+    f"{API_BASE}/workspaces/{workspace_id}/reports/{report['id']}/getDefinition",
+    request_headers,
+)
+model_payload = post_and_wait(
+    f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model['id']}/getDefinition?format=TMDL",
+    request_headers,
+)
+
+report_parts = decode_parts(report_payload)
+model_parts = decode_parts(model_payload)
+pages, visuals = inventory_report(report_parts)
+model_inventory = parse_tmdl(model_parts)
+visual_counts = Counter(item["type"] for item in visuals)
+
+section("REPORT SUMMARY")
+print(f"Report: {REPORT_NAME}")
+print(f"Report ID: {report['id']}")
+print(f"Definition parts: {len(report_parts)}")
+print(f"Pages: {len(pages)}")
+print(f"Visual definitions: {len(visuals)}")
+
+section("PAGES")
+for page in pages:
+    print(
+        f"- {page['name']} | ID: {page['id']} | "
+        f"Canvas: {page['width']} x {page['height']} | "
+        f"Display: {page['display_option']} | Active: {page['active']}"
+    )
+
+section("VISUAL TYPE COUNTS")
+for visual_type, count in sorted(
+    visual_counts.items(),
+    key=lambda item: (-item[1], item[0]),
+):
+    print(f"- {visual_type}: {count}")
+
+section("VISUAL DEFINITIONS")
+for index, visual in enumerate(visuals, start=1):
+    print(
+        f"{index:02d}. Type: {visual['type']} | ID: {visual['id']} | "
+        f"Page: {visual['page']} | x={visual['x']}, y={visual['y']}, "
+        f"w={visual['width']}, h={visual['height']}"
+    )
+
+section("SEMANTIC MODEL SUMMARY")
+print(f"Semantic model: {SEMANTIC_MODEL_NAME}")
+print(f"Semantic model ID: {model['id']}")
+print(f"Definition parts: {len(model_parts)}")
+print(f"TMDL parts: {model_inventory['part_count']}")
+print(f"Tables: {len(model_inventory['tables'])}")
+print(f"Columns: {len(model_inventory['columns'])}")
+print(f"Measures: {len(model_inventory['measures'])}")
+print(f"Relationships: {len(model_inventory['relationships'])}")
+print(f"Calculation groups: {len(model_inventory['calculation_groups'])}")
+print(f"Calculation items: {len(model_inventory['calculation_items'])}")
+
+section("TABLES")
+for table_name in model_inventory["tables"]:
+    print(f"- {table_name}")
+
+section("MEASURES")
+for table_name, measure_name in model_inventory["measures"]:
+    print(f"- {table_name}[{measure_name}]")
+
+section("CALCULATION GROUPS")
+if model_inventory["calculation_groups"]:
+    for group_name in model_inventory["calculation_groups"]:
+        print(f"- {group_name}")
+else:
+    print("- None detected")
+
+section("CALCULATION ITEMS")
+if model_inventory["calculation_items"]:
+    for group_name, item_name in model_inventory["calculation_items"]:
+        print(f"- {group_name}: {item_name}")
+else:
+    print("- None detected")
+
+section("FINAL STATUS")
+print("PASS: Read-only report and semantic-model inventory completed.")
+print("No report or semantic-model definition was modified.")
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+import base64
+import json
+import time
+from collections import defaultdict
+
+import notebookutils
+import requests
+
+REPORT_NAME = "Global Sales Performance Dashboard"
+API_BASE = "https://api.fabric.microsoft.com/v1"
+TIMEOUT_SECONDS = 120
+MAX_WAIT_SECONDS = 600
+
+
+def get_context_value(context, name):
+    if isinstance(context, dict):
+        return context.get(name)
+    return getattr(context, name, None)
+
+
+def get_headers():
+    token = notebookutils.credentials.getToken("pbi")
+    if not token:
+        raise RuntimeError("Fabric authentication token could not be obtained.")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+
+def raise_api_error(response):
+    if response.ok:
+        return
+    try:
+        body = response.json()
+    except ValueError:
+        body = response.text
+    raise RuntimeError(
+        f"Fabric API request failed.\n"
+        f"Status: {response.status_code}\n"
+        f"URL: {response.url}\n"
+        f"Response: {body}"
+    )
+
+
+def get_json(url, request_headers):
+    response = requests.get(
+        url,
+        headers=request_headers,
+        timeout=TIMEOUT_SECONDS,
+    )
+    raise_api_error(response)
+    return response.json()
+
+
+def post_and_wait(url, request_headers):
+    response = requests.post(
+        url,
+        headers=request_headers,
+        timeout=TIMEOUT_SECONDS,
+    )
+    raise_api_error(response)
+
+    if response.status_code == 200:
+        return response.json()
+
+    if response.status_code != 202:
+        raise RuntimeError(f"Unexpected Fabric API status: {response.status_code}")
+
+    operation_location = response.headers.get("Location")
+    operation_id = response.headers.get("x-ms-operation-id")
+    retry_after = int(response.headers.get("Retry-After", "5"))
+
+    if not operation_location and operation_id:
+        operation_location = f"{API_BASE}/operations/{operation_id}"
+
+    if not operation_location:
+        raise RuntimeError("Fabric returned HTTP 202 without an operation location.")
+
+    started_at = time.time()
+
+    while True:
+        if time.time() - started_at > MAX_WAIT_SECONDS:
+            raise TimeoutError("The Fabric long-running operation exceeded the wait limit.")
+
+        time.sleep(max(retry_after, 1))
+        operation_response = requests.get(
+            operation_location,
+            headers=request_headers,
+            timeout=TIMEOUT_SECONDS,
+        )
+        raise_api_error(operation_response)
+        operation = operation_response.json()
+        status = str(operation.get("status", "")).lower()
+
+        if status in {"succeeded", "completed"}:
+            result_location = operation_response.headers.get("Location")
+            if not result_location:
+                result_location = f"{operation_location.rstrip('/')}/result"
+            result_response = requests.get(
+                result_location,
+                headers=request_headers,
+                timeout=TIMEOUT_SECONDS,
+            )
+            raise_api_error(result_response)
+            return result_response.json()
+
+        if status in {"failed", "cancelled", "canceled"}:
+            raise RuntimeError(
+                "Fabric long-running operation failed.\n"
+                + json.dumps(operation, indent=2)
+            )
+
+        retry_after = int(operation_response.headers.get("Retry-After", "5"))
+
+
+def list_workspace_items(workspace_id, request_headers):
+    url = f"{API_BASE}/workspaces/{workspace_id}/items"
+    items = []
+    while url:
+        payload = get_json(url, request_headers)
+        items.extend(payload.get("value", []))
+        url = payload.get("continuationUri")
+    return items
+
+
+def find_item(items, display_name, item_type):
+    matches = [
+        item
+        for item in items
+        if item.get("displayName") == display_name and item.get("type") == item_type
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected exactly one {item_type} named '{display_name}', "
+            f"but found {len(matches)}."
+        )
+    return matches[0]
+
+
+def decode_parts(payload):
+    decoded = {}
+    for part in payload.get("definition", {}).get("parts", []):
+        path = part.get("path")
+        value = part.get("payload")
+        payload_type = part.get("payloadType")
+        if not path or value is None:
+            continue
+        if payload_type == "InlineBase64":
+            decoded[path] = base64.b64decode(value).decode("utf-8", errors="replace")
+        else:
+            decoded[path] = str(value)
+    return decoded
+
+
+def walk(node, path="$"):
+    if isinstance(node, dict):
+        yield path, node
+        for key, value in node.items():
+            yield from walk(value, f"{path}.{key}")
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from walk(value, f"{path}[{index}]")
+
+
+def first_string_for_key(node, target_key):
+    if isinstance(node, dict):
+        value = node.get(target_key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        for child in node.values():
+            result = first_string_for_key(child, target_key)
+            if result:
+                return result
+    elif isinstance(node, list):
+        for child in node:
+            result = first_string_for_key(child, target_key)
+            if result:
+                return result
+    return ""
+
+
+def collect_semantic_references(node):
+    references = set()
+
+    for _, item in walk(node):
+        if not isinstance(item, dict):
+            continue
+
+        column = item.get("Column")
+        if isinstance(column, dict):
+            source = column.get("Expression", {}).get("SourceRef", {}).get("Source")
+            property_name = column.get("Property")
+            if source and property_name:
+                references.add(f"COLUMN {source}[{property_name}]")
+
+        measure = item.get("Measure")
+        if isinstance(measure, dict):
+            source = measure.get("Expression", {}).get("SourceRef", {}).get("Source")
+            property_name = measure.get("Property")
+            if source and property_name:
+                references.add(f"MEASURE {source}[{property_name}]")
+
+        aggregation = item.get("Aggregation")
+        if isinstance(aggregation, dict):
+            expression = aggregation.get("Expression", {})
+            aggregation_function = aggregation.get("Function", "Aggregation")
+            column_node = expression.get("Column", {})
+            source = column_node.get("Expression", {}).get("SourceRef", {}).get("Source")
+            property_name = column_node.get("Property")
+            if source and property_name:
+                references.add(
+                    f"{aggregation_function.upper()} {source}[{property_name}]"
+                )
+
+    return sorted(references)
+
+
+def collect_filters(node):
+    filters = []
+    for path, item in walk(node):
+        if not isinstance(item, dict):
+            continue
+        if "filter" in path.lower() or "condition" in path.lower():
+            references = collect_semantic_references(item)
+            if references:
+                filters.extend(references)
+    return sorted(set(filters))
+
+
+def get_position(definition):
+    position = definition.get("position")
+    if isinstance(position, dict):
+        return position
+
+    for _, item in walk(definition):
+        if not isinstance(item, dict):
+            continue
+        if all(key in item for key in ("x", "y", "width", "height")):
+            return item
+
+    return {}
+
+
+def get_title(definition):
+    title = first_string_for_key(definition, "title")
+    if title:
+        return title
+
+    for _, item in walk(definition):
+        if not isinstance(item, dict):
+            continue
+        literal = item.get("Literal")
+        if isinstance(literal, dict):
+            value = literal.get("Value")
+            if isinstance(value, str):
+                cleaned = value.strip("'\"")
+                if cleaned and len(cleaned) <= 120:
+                    return cleaned
+
+    return ""
+
+
+def section(title):
+    print("\n" + "=" * 100)
+    print(title)
+    print("=" * 100)
+
+
+context = notebookutils.runtime.context
+workspace_id = get_context_value(context, "currentWorkspaceId")
+workspace_name = get_context_value(context, "currentWorkspaceName")
+
+if not workspace_id:
+    raise RuntimeError("The current Fabric workspace ID could not be obtained.")
+
+request_headers = get_headers()
+workspace_items = list_workspace_items(workspace_id, request_headers)
+report_item = find_item(workspace_items, REPORT_NAME, "Report")
+
+report_payload = post_and_wait(
+    f"{API_BASE}/workspaces/{workspace_id}/reports/{report_item['id']}/getDefinition",
+    request_headers,
+)
+report_parts = decode_parts(report_payload)
+pages_metadata = json.loads(report_parts["definition/pages/pages.json"])
+
+section("READ-ONLY VISUAL BINDING AUDIT")
+print(f"Workspace: {workspace_name}")
+print(f"Report: {REPORT_NAME}")
+print(f"Report ID: {report_item['id']}")
+print(f"Pages: {len(pages_metadata.get('pageOrder', []))}")
+
+visual_count = 0
+summary = defaultdict(int)
+
+for page_id in pages_metadata.get("pageOrder", []):
+    page_path = f"definition/pages/{page_id}/page.json"
+    page = json.loads(report_parts[page_path])
+    page_name = page.get("displayName", page_id)
+    prefix = f"definition/pages/{page_id}/visuals/"
+
+    section(f"PAGE: {page_name}")
+
+    for path in sorted(report_parts):
+        if not path.startswith(prefix) or not path.endswith("/visual.json"):
+            continue
+
+        visual_count += 1
+        visual_id = path[len(prefix):].split("/", 1)[0]
+        definition = json.loads(report_parts[path])
+        visual_type = first_string_for_key(definition, "visualType") or "Unknown"
+        title = get_title(definition) or "Not detected"
+        position = get_position(definition)
+        references = collect_semantic_references(definition)
+        filters = collect_filters(definition)
+        summary[visual_type] += 1
+
+        print(f"\nVISUAL {visual_count:02d}")
+        print(f"ID: {visual_id}")
+        print(f"Type: {visual_type}")
+        print(f"Title: {title}")
+        print(
+            "Position: "
+            f"x={position.get('x')}, y={position.get('y')}, "
+            f"w={position.get('width')}, h={position.get('height')}"
+        )
+        print("Semantic references:")
+        if references:
+            for reference in references:
+                print(f"- {reference}")
+        else:
+            print("- None detected")
+
+        print("Filter references:")
+        if filters:
+            for filter_reference in filters:
+                print(f"- {filter_reference}")
+        else:
+            print("- None detected")
+
+        print(f"Definition path: {path}")
+
+section("VISUAL TYPE SUMMARY")
+for visual_type, count in sorted(summary.items(), key=lambda item: (-item[1], item[0])):
+    print(f"- {visual_type}: {count}")
+
+section("FINAL STATUS")
+print(f"PASS: Inspected {visual_count} visual definitions in read-only mode.")
+print("No report or semantic-model definition was modified.")
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+import base64
+import json
+import re
+import time
+
+import notebookutils
+import requests
+
+APPLY_CHANGES = False
+SEMANTIC_MODEL_NAME = "Sales Records Model"
+CALCULATION_GROUP_NAME = "Time Comparison"
+DATE_TABLE_NAME = "date"
+DATE_COLUMN_NAME = "full_date"
+API_BASE = "https://api.fabric.microsoft.com/v1"
+TIMEOUT_SECONDS = 120
+MAX_WAIT_SECONDS = 600
+MODEL_PATH = "definition/model.tmdl"
+GROUP_PATH = "definition/tables/Time Comparison.tmdl"
+
+
+def context_value(context, name):
+    if isinstance(context, dict):
+        return context.get(name)
+    return getattr(context, name, None)
+
+
+def request_headers():
+    token = notebookutils.credentials.getToken("pbi")
+    if not token:
+        raise RuntimeError("Fabric authentication token could not be obtained.")
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def raise_api_error(response):
+    if response.ok:
+        return
+    try:
+        body = response.json()
+    except ValueError:
+        body = response.text
+    raise RuntimeError(
+        f"Fabric API request failed.\nStatus: {response.status_code}\n"
+        f"URL: {response.url}\nResponse: {body}"
+    )
+
+
+def wait_for_operation(response, headers, expect_result):
+    raise_api_error(response)
+    if response.status_code == 200:
+        return response.json() if expect_result else None
+    if response.status_code != 202:
+        raise RuntimeError(f"Unexpected Fabric API status: {response.status_code}")
+
+    location = response.headers.get("Location")
+    operation_id = response.headers.get("x-ms-operation-id")
+    if not location and operation_id:
+        location = f"{API_BASE}/operations/{operation_id}"
+    if not location:
+        raise RuntimeError("Fabric returned HTTP 202 without an operation location.")
+
+    retry_after = int(response.headers.get("Retry-After", "5"))
+    started_at = time.time()
+
+    while True:
+        if time.time() - started_at > MAX_WAIT_SECONDS:
+            raise TimeoutError("The Fabric long-running operation exceeded the wait limit.")
+        time.sleep(max(retry_after, 1))
+        operation_response = requests.get(location, headers=headers, timeout=TIMEOUT_SECONDS)
+        raise_api_error(operation_response)
+        operation = operation_response.json()
+        status = str(operation.get("status", "")).lower()
+
+        if status in {"succeeded", "completed"}:
+            if not expect_result:
+                return None
+            result_location = operation_response.headers.get("Location")
+            if not result_location:
+                result_location = f"{location.rstrip('/')}/result"
+            result_response = requests.get(
+                result_location, headers=headers, timeout=TIMEOUT_SECONDS
+            )
+            raise_api_error(result_response)
+            return result_response.json()
+
+        if status in {"failed", "cancelled", "canceled"}:
+            raise RuntimeError(
+                "Fabric long-running operation failed.\n"
+                + json.dumps(operation, indent=2)
+            )
+        retry_after = int(operation_response.headers.get("Retry-After", "5"))
+
+
+def get_json(url, headers):
+    response = requests.get(url, headers=headers, timeout=TIMEOUT_SECONDS)
+    raise_api_error(response)
+    return response.json()
+
+
+def post_for_result(url, headers, body=None):
+    response = requests.post(
+        url, headers=headers, json=body, timeout=TIMEOUT_SECONDS
+    )
+    return wait_for_operation(response, headers, expect_result=True)
+
+
+def post_without_result(url, headers, body):
+    response = requests.post(
+        url, headers=headers, json=body, timeout=TIMEOUT_SECONDS
+    )
+    wait_for_operation(response, headers, expect_result=False)
+
+
+def list_items(workspace_id, headers):
+    url = f"{API_BASE}/workspaces/{workspace_id}/items"
+    items = []
+    while url:
+        payload = get_json(url, headers)
+        items.extend(payload.get("value", []))
+        url = payload.get("continuationUri")
+    return items
+
+
+def find_item(items, name, item_type):
+    matches = [
+        item for item in items
+        if item.get("displayName") == name and item.get("type") == item_type
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected exactly one {item_type} named '{name}', found {len(matches)}."
+        )
+    return matches[0]
+
+
+def decode_text(payload):
+    return base64.b64decode(payload).decode("utf-8", errors="strict")
+
+
+def encode_text(text):
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+def parts_by_path(payload):
+    parts = payload.get("definition", {}).get("parts", [])
+    return {part["path"]: dict(part) for part in parts}
+
+
+def text_part(parts, path):
+    if path not in parts:
+        raise KeyError(f"Required semantic-model part was not found: {path}")
+    if parts[path].get("payloadType") != "InlineBase64":
+        raise RuntimeError(f"Unsupported payload type for {path}.")
+    return decode_text(parts[path]["payload"])
+
+
+def validate_date_column(parts):
+    table_pattern = re.compile(
+        rf"(?mi)^\s*table\s+'?{re.escape(DATE_TABLE_NAME)}'?\s*$"
+    )
+    column_pattern = re.compile(
+        rf"(?mi)^\s*column\s+'?{re.escape(DATE_COLUMN_NAME)}'?\s*$"
+    )
+    for path in sorted(parts):
+        if not path.lower().startswith("definition/tables/"):
+            continue
+        if not path.lower().endswith(".tmdl"):
+            continue
+        content = text_part(parts, path)
+        if table_pattern.search(content):
+            if not column_pattern.search(content):
+                columns = re.findall(
+                    r"(?mi)^\s*column\s+'?([^'\r\n]+)'?\s*$", content
+                )
+                raise RuntimeError(
+                    f"Missing '{DATE_TABLE_NAME}[{DATE_COLUMN_NAME}]' in {path}. "
+                    f"Detected columns: {columns}"
+                )
+            return path
+    raise RuntimeError(f"Table '{DATE_TABLE_NAME}' was not found in TMDL.")
+
+
+def update_model_tmdl(model_tmdl):
+    property_pattern = re.compile(
+        r"(?mi)^\s*discourageImplicitMeasures\s*:\s*(true|false)\s*$"
+    )
+    if property_pattern.search(model_tmdl):
+        result = property_pattern.sub(
+            "\tdiscourageImplicitMeasures: true", model_tmdl, count=1
+        )
+    else:
+        lines = model_tmdl.splitlines()
+        lines.insert(1 if lines else 0, "\tdiscourageImplicitMeasures: true")
+        result = "\n".join(lines)
+        if model_tmdl.endswith("\n"):
+            result += "\n"
+
+    reference_pattern = re.compile(
+        rf"(?mi)^\s*ref\s+table\s+'?{re.escape(CALCULATION_GROUP_NAME)}'?\s*$"
+    )
+    if reference_pattern.search(result):
+        raise RuntimeError(
+            f"Model already references '{CALCULATION_GROUP_NAME}'."
+        )
+    if not result.endswith("\n"):
+        result += "\n"
+    return result + f"ref table '{CALCULATION_GROUP_NAME}'\n"
+
+
+def calculation_group_tmdl():
+    return """table 'Time Comparison'
+\tcalculationGroup
+\t\tprecedence: 10
+
+\t\tcalculationItem Current = SELECTEDMEASURE()
+\t\t\tordinal: 0
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+\t\tcalculationItem 'Previous Year' =
+\t\t\tCALCULATE(
+\t\t\t\tSELECTEDMEASURE(),
+\t\t\t\tSAMEPERIODLASTYEAR('date'[full_date])
+\t\t\t)
+\t\t\tordinal: 1
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+\t\tcalculationItem YoY =
+\t\t\tVAR CurrentValue = SELECTEDMEASURE()
+\t\t\tVAR PreviousYearValue =
+\t\t\t\tCALCULATE(
+\t\t\t\t\tSELECTEDMEASURE(),
+\t\t\t\t\tSAMEPERIODLASTYEAR('date'[full_date])
+\t\t\t\t)
+\t\t\tRETURN
+\t\t\t\tCurrentValue - PreviousYearValue
+\t\t\tordinal: 2
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+\t\tcalculationItem 'YoY %' =
+\t\t\tVAR CurrentValue = SELECTEDMEASURE()
+\t\t\tVAR PreviousYearValue =
+\t\t\t\tCALCULATE(
+\t\t\t\t\tSELECTEDMEASURE(),
+\t\t\t\t\tSAMEPERIODLASTYEAR('date'[full_date])
+\t\t\t\t)
+\t\t\tRETURN
+\t\t\t\tDIVIDE(CurrentValue - PreviousYearValue, PreviousYearValue)
+\t\t\tordinal: 3
+\t\t\tformatStringDefinition = "0.00%;-0.00%;0.00%"
+
+\t\tcalculationItem YTD =
+\t\t\tCALCULATE(
+\t\t\t\tSELECTEDMEASURE(),
+\t\t\t\tDATESYTD('date'[full_date])
+\t\t\t)
+\t\t\tordinal: 4
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+\tcolumn 'Time Comparison'
+\t\tdataType: string
+\t\tsummarizeBy: none
+\t\tsourceColumn: Name
+\t\tsortByColumn: Ordinal
+
+\tcolumn Ordinal
+\t\tdataType: int64
+\t\tformatString: 0
+\t\tsummarizeBy: sum
+\t\tsourceColumn: Ordinal
+"""
+
+
+def update_payload(original_parts, changed_parts):
+    output = []
+    for path, part in original_parts.items():
+        new_part = dict(part)
+        if path in changed_parts:
+            new_part["payload"] = encode_text(changed_parts[path])
+            new_part["payloadType"] = "InlineBase64"
+        output.append(new_part)
+    for path, content in changed_parts.items():
+        if path not in original_parts:
+            output.append(
+                {
+                    "path": path,
+                    "payload": encode_text(content),
+                    "payloadType": "InlineBase64",
+                }
+            )
+    return {"definition": {"parts": output}}
+
+
+def verify_stored(workspace_id, model_id, headers):
+    payload = post_for_result(
+        f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/getDefinition?format=TMDL",
+        headers,
+    )
+    parts = parts_by_path(payload)
+    if GROUP_PATH not in parts:
+        raise RuntimeError("Calculation-group TMDL was not stored by Fabric.")
+    group = text_part(parts, GROUP_PATH)
+    required = [
+        "calculationItem Current",
+        "calculationItem 'Previous Year'",
+        "calculationItem YoY",
+        "calculationItem 'YoY %'",
+        "calculationItem YTD",
+    ]
+    missing = [token for token in required if token not in group]
+    if missing:
+        raise RuntimeError(f"Stored calculation group is incomplete: {missing}")
+    model = text_part(parts, MODEL_PATH)
+    if "ref table 'Time Comparison'" not in model:
+        raise RuntimeError("Stored model does not reference Time Comparison.")
+    return parts
+
+
+def section(title):
+    print("\n" + "=" * 88)
+    print(title)
+    print("=" * 88)
+
+
+context = notebookutils.runtime.context
+workspace_id = context_value(context, "currentWorkspaceId")
+workspace_name = context_value(context, "currentWorkspaceName")
+if not workspace_id:
+    raise RuntimeError("The current Fabric workspace ID could not be obtained.")
+
+headers = request_headers()
+items = list_items(workspace_id, headers)
+model_item = find_item(items, SEMANTIC_MODEL_NAME, "SemanticModel")
+model_id = model_item["id"]
+
+section("SEMANTIC MODEL V1.2.0 PREPARATION")
+print(f"Workspace: {workspace_name}")
+print(f"Semantic model: {SEMANTIC_MODEL_NAME}")
+print(f"Semantic model ID: {model_id}")
+print(f"Apply changes: {APPLY_CHANGES}")
+
+original_definition = post_for_result(
+    f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/getDefinition?format=TMDL",
+    headers,
+)
+original_parts = parts_by_path(original_definition)
+rollback_request_body = {"definition": {"parts": list(original_parts.values())}}
+
+if GROUP_PATH in original_parts:
+    raise RuntimeError(
+        f"{GROUP_PATH} already exists. The script stopped without overwriting it."
+    )
+
+date_table_path = validate_date_column(original_parts)
+model_tmdl = update_model_tmdl(text_part(original_parts, MODEL_PATH))
+group_tmdl = calculation_group_tmdl()
+changed_parts = {MODEL_PATH: model_tmdl, GROUP_PATH: group_tmdl}
+update_request_body = update_payload(original_parts, changed_parts)
+
+section("VALIDATION")
+print(f"Validated date table part: {date_table_path}")
+print("Validated date reference: 'date'[full_date]")
+print("Validated items: Current, Previous Year, YoY, YoY %, YTD")
+print("Prepared rollback_request_body in memory.")
+print(f"Original parts: {len(original_parts)}")
+print(f"Prepared parts: {len(update_request_body['definition']['parts'])}")
+
+section("CALCULATION GROUP TMDL PREVIEW")
+print(group_tmdl)
+
+if not APPLY_CHANGES:
+    section("FINAL STATUS")
+    print("PASS: Dry-run validation completed.")
+    print("No semantic-model definition was modified.")
+    print("The script is locked with APPLY_CHANGES = False.")
+else:
+    update_url = (
+        f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/updateDefinition"
+    )
+    try:
+        post_without_result(update_url, headers, update_request_body)
+        stored_parts = verify_stored(workspace_id, model_id, headers)
+    except Exception as deployment_error:
+        print("Deployment or verification failed. Attempting rollback.")
+        post_without_result(update_url, headers, rollback_request_body)
+        raise RuntimeError(
+            "The semantic-model update failed and rollback was submitted."
+        ) from deployment_error
+
+    section("FINAL STATUS")
+    print("PASS: Time Comparison calculation group deployed and verified.")
+    print(f"Stored definition parts: {len(stored_parts)}")
+    print("rollback_request_body remains available in this notebook session.")
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+import base64
+import json
+import re
+import time
+
+import notebookutils
+import requests
+
+APPLY_CHANGES = True
+SEMANTIC_MODEL_NAME = "Sales Records Model"
+CALCULATION_GROUP_NAME = "Time Comparison"
+DATE_TABLE_NAME = "date"
+DATE_COLUMN_NAME = "full_date"
+API_BASE = "https://api.fabric.microsoft.com/v1"
+TIMEOUT_SECONDS = 120
+MAX_WAIT_SECONDS = 600
+MODEL_PATH = "definition/model.tmdl"
+GROUP_PATH = "definition/tables/Time Comparison.tmdl"
+
+
+def context_value(context, name):
+    if isinstance(context, dict):
+        return context.get(name)
+    return getattr(context, name, None)
+
+
+def request_headers():
+    token = notebookutils.credentials.getToken("pbi")
+    if not token:
+        raise RuntimeError("Fabric authentication token could not be obtained.")
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def raise_api_error(response):
+    if response.ok:
+        return
+    try:
+        body = response.json()
+    except ValueError:
+        body = response.text
+    raise RuntimeError(
+        f"Fabric API request failed.\nStatus: {response.status_code}\n"
+        f"URL: {response.url}\nResponse: {body}"
+    )
+
+
+def wait_for_operation(response, headers, expect_result):
+    raise_api_error(response)
+    if response.status_code == 200:
+        return response.json() if expect_result else None
+    if response.status_code != 202:
+        raise RuntimeError(f"Unexpected Fabric API status: {response.status_code}")
+
+    location = response.headers.get("Location")
+    operation_id = response.headers.get("x-ms-operation-id")
+    if not location and operation_id:
+        location = f"{API_BASE}/operations/{operation_id}"
+    if not location:
+        raise RuntimeError("Fabric returned HTTP 202 without an operation location.")
+
+    retry_after = int(response.headers.get("Retry-After", "5"))
+    started_at = time.time()
+
+    while True:
+        if time.time() - started_at > MAX_WAIT_SECONDS:
+            raise TimeoutError("The Fabric long-running operation exceeded the wait limit.")
+        time.sleep(max(retry_after, 1))
+        operation_response = requests.get(location, headers=headers, timeout=TIMEOUT_SECONDS)
+        raise_api_error(operation_response)
+        operation = operation_response.json()
+        status = str(operation.get("status", "")).lower()
+
+        if status in {"succeeded", "completed"}:
+            if not expect_result:
+                return None
+            result_location = operation_response.headers.get("Location")
+            if not result_location:
+                result_location = f"{location.rstrip('/')}/result"
+            result_response = requests.get(
+                result_location, headers=headers, timeout=TIMEOUT_SECONDS
+            )
+            raise_api_error(result_response)
+            return result_response.json()
+
+        if status in {"failed", "cancelled", "canceled"}:
+            raise RuntimeError(
+                "Fabric long-running operation failed.\n"
+                + json.dumps(operation, indent=2)
+            )
+        retry_after = int(operation_response.headers.get("Retry-After", "5"))
+
+
+def get_json(url, headers):
+    response = requests.get(url, headers=headers, timeout=TIMEOUT_SECONDS)
+    raise_api_error(response)
+    return response.json()
+
+
+def post_for_result(url, headers, body=None):
+    response = requests.post(
+        url, headers=headers, json=body, timeout=TIMEOUT_SECONDS
+    )
+    return wait_for_operation(response, headers, expect_result=True)
+
+
+def post_without_result(url, headers, body):
+    response = requests.post(
+        url, headers=headers, json=body, timeout=TIMEOUT_SECONDS
+    )
+    wait_for_operation(response, headers, expect_result=False)
+
+
+def list_items(workspace_id, headers):
+    url = f"{API_BASE}/workspaces/{workspace_id}/items"
+    items = []
+    while url:
+        payload = get_json(url, headers)
+        items.extend(payload.get("value", []))
+        url = payload.get("continuationUri")
+    return items
+
+
+def find_item(items, name, item_type):
+    matches = [
+        item for item in items
+        if item.get("displayName") == name and item.get("type") == item_type
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected exactly one {item_type} named '{name}', found {len(matches)}."
+        )
+    return matches[0]
+
+
+def decode_text(payload):
+    return base64.b64decode(payload).decode("utf-8", errors="strict")
+
+
+def encode_text(text):
+    return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+def parts_by_path(payload):
+    parts = payload.get("definition", {}).get("parts", [])
+    return {part["path"]: dict(part) for part in parts}
+
+
+def text_part(parts, path):
+    if path not in parts:
+        raise KeyError(f"Required semantic-model part was not found: {path}")
+    if parts[path].get("payloadType") != "InlineBase64":
+        raise RuntimeError(f"Unsupported payload type for {path}.")
+    return decode_text(parts[path]["payload"])
+
+
+def validate_date_column(parts):
+    table_pattern = re.compile(
+        rf"(?mi)^\s*table\s+'?{re.escape(DATE_TABLE_NAME)}'?\s*$"
+    )
+    column_pattern = re.compile(
+        rf"(?mi)^\s*column\s+'?{re.escape(DATE_COLUMN_NAME)}'?\s*$"
+    )
+    for path in sorted(parts):
+        if not path.lower().startswith("definition/tables/"):
+            continue
+        if not path.lower().endswith(".tmdl"):
+            continue
+        content = text_part(parts, path)
+        if table_pattern.search(content):
+            if not column_pattern.search(content):
+                columns = re.findall(
+                    r"(?mi)^\s*column\s+'?([^'\r\n]+)'?\s*$", content
+                )
+                raise RuntimeError(
+                    f"Missing '{DATE_TABLE_NAME}[{DATE_COLUMN_NAME}]' in {path}. "
+                    f"Detected columns: {columns}"
+                )
+            return path
+    raise RuntimeError(f"Table '{DATE_TABLE_NAME}' was not found in TMDL.")
+
+
+def update_model_tmdl(model_tmdl):
+    property_pattern = re.compile(
+        r"(?mi)^\s*discourageImplicitMeasures\s*:\s*(true|false)\s*$"
+    )
+    if property_pattern.search(model_tmdl):
+        result = property_pattern.sub(
+            "\tdiscourageImplicitMeasures: true", model_tmdl, count=1
+        )
+    else:
+        lines = model_tmdl.splitlines()
+        lines.insert(1 if lines else 0, "\tdiscourageImplicitMeasures: true")
+        result = "\n".join(lines)
+        if model_tmdl.endswith("\n"):
+            result += "\n"
+
+    reference_pattern = re.compile(
+        rf"(?mi)^\s*ref\s+table\s+'?{re.escape(CALCULATION_GROUP_NAME)}'?\s*$"
+    )
+    if reference_pattern.search(result):
+        raise RuntimeError(
+            f"Model already references '{CALCULATION_GROUP_NAME}'."
+        )
+    if not result.endswith("\n"):
+        result += "\n"
+    return result + f"ref table '{CALCULATION_GROUP_NAME}'\n"
+
+
+def calculation_group_tmdl():
+    return """table 'Time Comparison'
+	calculationGroup
+		precedence: 10
+		calculationItem Current = SELECTEDMEASURE()
+		calculationItem 'Previous Year' = CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))
+		calculationItem YoY = SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))
+		calculationItem 'YoY %' = DIVIDE(SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
+		calculationItem YTD = CALCULATE(SELECTEDMEASURE(), DATESYTD('date'[full_date]))
+
+	column 'Time Comparison'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Name
+		sortByColumn: Ordinal
+		annotation SummarizationSetBy = Automatic
+
+	column Ordinal
+		dataType: int64
+		formatString: 0
+		summarizeBy: sum
+		sourceColumn: Ordinal
+		annotation SummarizationSetBy = Automatic
+"""
+
+
+def update_payload(original_parts, changed_parts):
+    output = []
+    for path, part in original_parts.items():
+        new_part = dict(part)
+        if path in changed_parts:
+            new_part["payload"] = encode_text(changed_parts[path])
+            new_part["payloadType"] = "InlineBase64"
+        output.append(new_part)
+    for path, content in changed_parts.items():
+        if path not in original_parts:
+            output.append(
+                {
+                    "path": path,
+                    "payload": encode_text(content),
+                    "payloadType": "InlineBase64",
+                }
+            )
+    return {"definition": {"parts": output}}
+
+
+def verify_stored(workspace_id, model_id, headers):
+    payload = post_for_result(
+        f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/getDefinition?format=TMDL",
+        headers,
+    )
+    parts = parts_by_path(payload)
+    if GROUP_PATH not in parts:
+        raise RuntimeError("Calculation-group TMDL was not stored by Fabric.")
+    group = text_part(parts, GROUP_PATH)
+    required = [
+        "calculationItem Current",
+        "calculationItem 'Previous Year'",
+        "calculationItem YoY",
+        "calculationItem 'YoY %'",
+        "calculationItem YTD",
+    ]
+    missing = [token for token in required if token not in group]
+    if missing:
+        raise RuntimeError(f"Stored calculation group is incomplete: {missing}")
+    model = text_part(parts, MODEL_PATH)
+    if "ref table 'Time Comparison'" not in model:
+        raise RuntimeError("Stored model does not reference Time Comparison.")
+    return parts
+
+
+def section(title):
+    print("\n" + "=" * 88)
+    print(title)
+    print("=" * 88)
+
+
+context = notebookutils.runtime.context
+workspace_id = context_value(context, "currentWorkspaceId")
+workspace_name = context_value(context, "currentWorkspaceName")
+if not workspace_id:
+    raise RuntimeError("The current Fabric workspace ID could not be obtained.")
+
+headers = request_headers()
+items = list_items(workspace_id, headers)
+model_item = find_item(items, SEMANTIC_MODEL_NAME, "SemanticModel")
+model_id = model_item["id"]
+
+section("SEMANTIC MODEL V1.2.0 PREPARATION")
+print(f"Workspace: {workspace_name}")
+print(f"Semantic model: {SEMANTIC_MODEL_NAME}")
+print(f"Semantic model ID: {model_id}")
+print(f"Apply changes: {APPLY_CHANGES}")
+
+original_definition = post_for_result(
+    f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/getDefinition?format=TMDL",
+    headers,
+)
+original_parts = parts_by_path(original_definition)
+rollback_request_body = {"definition": {"parts": list(original_parts.values())}}
+
+if GROUP_PATH not in original_parts:
+    raise RuntimeError(
+        f"{GROUP_PATH} was not found. This repair script only replaces the existing invalid calculation group."
+    )
+
+date_table_path = validate_date_column(original_parts)
+model_tmdl = text_part(original_parts, MODEL_PATH)
+group_tmdl = calculation_group_tmdl()
+changed_parts = {MODEL_PATH: model_tmdl, GROUP_PATH: group_tmdl}
+update_request_body = update_payload(original_parts, changed_parts)
+
+section("VALIDATION")
+print(f"Validated date table part: {date_table_path}")
+print("Validated date reference: 'date'[full_date]")
+print("Validated minimal one-line TMDL calculation-item syntax.")
+print("Validated items: Current, Previous Year, YoY, YoY %, YTD")
+print("Prepared rollback_request_body in memory.")
+print(f"Original parts: {len(original_parts)}")
+print(f"Prepared parts: {len(update_request_body['definition']['parts'])}")
+
+section("CALCULATION GROUP TMDL PREVIEW")
+print(group_tmdl)
+
+if not APPLY_CHANGES:
+    section("FINAL STATUS")
+    print("PASS: Dry-run validation completed.")
+    print("No semantic-model definition was modified.")
+    print("The script is locked with APPLY_CHANGES = True.")
+else:
+    update_url = (
+        f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/updateDefinition"
+    )
+    try:
+        post_without_result(update_url, headers, update_request_body)
+        stored_parts = verify_stored(workspace_id, model_id, headers)
+    except Exception as deployment_error:
+        print("Deployment or verification failed. Attempting rollback.")
+        post_without_result(update_url, headers, rollback_request_body)
+        raise RuntimeError(
+            "The semantic-model update failed and rollback was submitted."
+        ) from deployment_error
+
+    section("FINAL STATUS")
+    print("PASS: Time Comparison calculation group repaired and stored definition verified.")
+    print(f"Stored definition parts: {len(stored_parts)}")
+    print("rollback_request_body remains available in this notebook session.")
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+import base64
+import copy
+import json
+import time
+import uuid
+
+import notebookutils
+import requests
+
+REPORT_NAME = "Global Sales Performance Dashboard"
+DEV_PAGE_NAME = "Executive Overview v1.2 Dev"
+API_BASE = "https://api.fabric.microsoft.com/v1"
+TIMEOUT_SECONDS = 120
+MAX_WAIT_SECONDS = 600
+
+
+def context_value(context, name):
+    if isinstance(context, dict):
+        return context.get(name)
+    return getattr(context, name, None)
+
+
+def headers():
+    token = notebookutils.credentials.getToken("pbi")
+    if not token:
+        raise RuntimeError("Fabric authentication token could not be obtained.")
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+
+
+def raise_api_error(response):
+    if response.ok:
+        return
+    try:
+        body = response.json()
+    except ValueError:
+        body = response.text
+    raise RuntimeError(
+        f"Fabric API request failed.\nStatus: {response.status_code}\n"
+        f"URL: {response.url}\nResponse: {body}"
+    )
+
+
+def get_json(url, request_headers):
+    response = requests.get(url, headers=request_headers, timeout=TIMEOUT_SECONDS)
+    raise_api_error(response)
+    return response.json()
+
+
+def wait_for_operation(response, request_headers, expect_result):
+    raise_api_error(response)
+    if response.status_code == 200:
+        return response.json() if expect_result else None
+    if response.status_code != 202:
+        raise RuntimeError(f"Unexpected Fabric API status: {response.status_code}")
+
+    location = response.headers.get("Location")
+    operation_id = response.headers.get("x-ms-operation-id")
+    if not location and operation_id:
+        location = f"{API_BASE}/operations/{operation_id}"
+    if not location:
+        raise RuntimeError("Fabric returned HTTP 202 without an operation location.")
+
+    retry_after = int(response.headers.get("Retry-After", "5"))
+    started_at = time.time()
+
+    while True:
+        if time.time() - started_at > MAX_WAIT_SECONDS:
+            raise TimeoutError("The Fabric long-running operation exceeded the wait limit.")
+        time.sleep(max(retry_after, 1))
+        operation_response = requests.get(
+            location, headers=request_headers, timeout=TIMEOUT_SECONDS
+        )
+        raise_api_error(operation_response)
+        operation = operation_response.json()
+        status = str(operation.get("status", "")).lower()
+
+        if status in {"succeeded", "completed"}:
+            if not expect_result:
+                return None
+            result_location = operation_response.headers.get("Location")
+            if not result_location:
+                result_location = f"{location.rstrip('/')}/result"
+            result_response = requests.get(
+                result_location, headers=request_headers, timeout=TIMEOUT_SECONDS
+            )
+            raise_api_error(result_response)
+            return result_response.json()
+
+        if status in {"failed", "cancelled", "canceled"}:
+            raise RuntimeError(
+                "Fabric long-running operation failed.\n"
+                + json.dumps(operation, indent=2)
+            )
+        retry_after = int(operation_response.headers.get("Retry-After", "5"))
+
+
+def post_for_result(url, request_headers):
+    response = requests.post(url, headers=request_headers, timeout=TIMEOUT_SECONDS)
+    return wait_for_operation(response, request_headers, True)
+
+
+def post_update(url, request_headers, body):
+    response = requests.post(
+        url, headers=request_headers, json=body, timeout=TIMEOUT_SECONDS
+    )
+    wait_for_operation(response, request_headers, False)
+
+
+def list_items(workspace_id, request_headers):
+    url = f"{API_BASE}/workspaces/{workspace_id}/items"
+    items = []
+    while url:
+        payload = get_json(url, request_headers)
+        items.extend(payload.get("value", []))
+        url = payload.get("continuationUri")
+    return items
+
+
+def find_item(items, name, item_type):
+    matches = [
+        item for item in items
+        if item.get("displayName") == name and item.get("type") == item_type
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected exactly one {item_type} named '{name}', found {len(matches)}."
+        )
+    return matches[0]
+
+
+def decode_parts(payload):
+    parts = {}
+    for part in payload.get("definition", {}).get("parts", []):
+        item = copy.deepcopy(part)
+        if item.get("payloadType") == "InlineBase64":
+            item["text"] = base64.b64decode(item["payload"]).decode(
+                "utf-8", errors="strict"
+            )
+        parts[item["path"]] = item
+    return parts
+
+
+def encode_parts(parts):
+    output = []
+    for path in sorted(parts):
+        part = copy.deepcopy(parts[path])
+        text = part.pop("text", None)
+        if text is not None:
+            part["payload"] = base64.b64encode(text.encode("utf-8")).decode("ascii")
+            part["payloadType"] = "InlineBase64"
+        output.append(part)
+    return {"definition": {"parts": output}}
+
+
+def json_part(parts, path):
+    if path not in parts:
+        raise KeyError(f"Definition part not found: {path}")
+    return json.loads(parts[path]["text"])
+
+
+def set_json_part(parts, path, value):
+    parts[path]["text"] = json.dumps(
+        value, ensure_ascii=False, separators=(",", ":")
+    )
+
+
+def walk(node):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from walk(value)
+
+
+def visual_type(definition):
+    for node in walk(definition):
+        value = node.get("visualType")
+        if isinstance(value, str):
+            return value
+    return ""
+
+
+def semantic_fields(definition):
+    fields = set()
+    for node in walk(definition):
+        column = node.get("Column")
+        if isinstance(column, dict):
+            source = column.get("Expression", {}).get("SourceRef", {}).get("Source")
+            prop = column.get("Property")
+            if source and prop:
+                fields.add((source, prop))
+    return fields
+
+
+def source_entities(definition):
+    entities = {}
+    for node in walk(definition):
+        sources = node.get("From")
+        if not isinstance(sources, list):
+            continue
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            alias = source.get("Name")
+            entity = source.get("Entity")
+            if alias and entity:
+                entities[alias] = entity
+    return entities
+
+
+def is_year_slicer(definition):
+    if visual_type(definition) != "slicer":
+        return False
+    aliases = source_entities(definition)
+    for alias, prop in semantic_fields(definition):
+        if aliases.get(alias) == "date" and prop == "year":
+            return True
+    return False
+
+
+def replace_year_with_time_comparison(node):
+    replacements = 0
+    if isinstance(node, dict):
+        if node.get("Entity") == "date":
+            node["Entity"] = "Time Comparison"
+            replacements += 1
+        if node.get("Property") == "year":
+            node["Property"] = "Time Comparison"
+            replacements += 1
+        for key, value in list(node.items()):
+            if isinstance(value, str):
+                updated = value.replace("date.year", "Time Comparison.Time Comparison")
+                updated = updated.replace("'date'[year]", "'Time Comparison'[Time Comparison]")
+                if updated != value:
+                    node[key] = updated
+                    replacements += 1
+            else:
+                replacements += replace_year_with_time_comparison(value)
+    elif isinstance(node, list):
+        for value in node:
+            replacements += replace_year_with_time_comparison(value)
+    return replacements
+
+
+def set_position(definition, x, y, width, height, tab_order):
+    if not isinstance(definition.get("position"), dict):
+        raise RuntimeError("The visual does not contain a top-level position object.")
+    definition["position"].update(
+        {
+            "x": x,
+            "y": y,
+            "width": width,
+            "height": height,
+            "tabOrder": tab_order,
+        }
+    )
+
+
+def find_dev_page(parts):
+    metadata = json_part(parts, "definition/pages/pages.json")
+    matches = []
+    for page_id in metadata.get("pageOrder", []):
+        path = f"definition/pages/{page_id}/page.json"
+        page = json_part(parts, path)
+        if page.get("displayName") == DEV_PAGE_NAME:
+            matches.append(page_id)
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected exactly one page named '{DEV_PAGE_NAME}', found {len(matches)}."
+        )
+    return matches[0]
+
+
+def inspect_page_visuals(parts, page_id):
+    prefix = f"definition/pages/{page_id}/visuals/"
+    visuals = []
+    for path in sorted(parts):
+        if path.startswith(prefix) and path.endswith("/visual.json"):
+            definition = json_part(parts, path)
+            visuals.append((path, definition))
+    return visuals
+
+
+def prepare_report(parts):
+    page_id = find_dev_page(parts)
+    visuals = inspect_page_visuals(parts, page_id)
+
+    year_slicers = [(path, definition) for path, definition in visuals if is_year_slicer(definition)]
+    if len(year_slicers) != 1:
+        raise RuntimeError(
+            f"Expected one Year slicer on the Dev page, found {len(year_slicers)}."
+        )
+
+    existing_time_slicers = []
+    for path, definition in visuals:
+        aliases = source_entities(definition)
+        for alias, prop in semantic_fields(definition):
+            if aliases.get(alias) == "Time Comparison" and prop == "Time Comparison":
+                existing_time_slicers.append(path)
+
+    if existing_time_slicers:
+        raise RuntimeError(
+            "The Dev page already contains a Time Comparison slicer. "
+            "No update was submitted."
+        )
+
+    year_path, year_definition = year_slicers[0]
+    year_visual_id = year_path.split("/")[-2]
+    new_visual_id = uuid.uuid4().hex[:20]
+    new_path = (
+        f"definition/pages/{page_id}/visuals/{new_visual_id}/visual.json"
+    )
+
+    new_definition = copy.deepcopy(year_definition)
+    new_definition["name"] = new_visual_id
+    replacements = replace_year_with_time_comparison(new_definition)
+    if replacements < 2:
+        raise RuntimeError(
+            "The Year slicer definition could not be safely converted to Time Comparison."
+        )
+
+    # Compact top row: Year, Time Comparison, then five KPI cards.
+    set_position(year_definition, 12, 12, 116, 112, 0)
+    set_position(new_definition, 140, 12, 180, 112, 1)
+
+    cards = []
+    for path, definition in visuals:
+        if visual_type(definition) == "cardVisual":
+            position = definition.get("position", {})
+            cards.append((float(position.get("x", 0)), path, definition))
+    cards.sort(key=lambda item: item[0])
+
+    if len(cards) != 5:
+        raise RuntimeError(f"Expected five KPI cards, found {len(cards)}.")
+
+    card_x = [332, 518.4, 704.8, 891.2, 1077.6]
+    for index, (_, path, definition) in enumerate(cards):
+        set_position(definition, card_x[index], 12, 174.4, 112, index + 2)
+        set_json_part(parts, path, definition)
+
+    set_json_part(parts, year_path, year_definition)
+    parts[new_path] = {
+        "path": new_path,
+        "payloadType": "InlineBase64",
+        "payload": "",
+        "text": json.dumps(
+            new_definition, ensure_ascii=False, separators=(",", ":")
+        ),
+    }
+
+    return {
+        "page_id": page_id,
+        "year_visual_id": year_visual_id,
+        "time_visual_id": new_visual_id,
+        "new_path": new_path,
+        "visual_count_before": len(visuals),
+        "visual_count_after": len(visuals) + 1,
+    }
+
+
+def verify_report(workspace_id, report_id, request_headers, expected):
+    payload = post_for_result(
+        f"{API_BASE}/workspaces/{workspace_id}/reports/{report_id}/getDefinition",
+        request_headers,
+    )
+    parts = decode_parts(payload)
+    page_id = find_dev_page(parts)
+    visuals = inspect_page_visuals(parts, page_id)
+
+    if len(visuals) != expected["visual_count_after"]:
+        raise RuntimeError(
+            f"Stored Dev page has {len(visuals)} visuals; "
+            f"expected {expected['visual_count_after']}."
+        )
+
+    time_slicer_count = 0
+    year_slicer_count = 0
+    for _, definition in visuals:
+        aliases = source_entities(definition)
+        fields = semantic_fields(definition)
+        for alias, prop in fields:
+            if aliases.get(alias) == "Time Comparison" and prop == "Time Comparison":
+                time_slicer_count += 1
+            if aliases.get(alias) == "date" and prop == "year":
+                year_slicer_count += 1
+
+    if time_slicer_count != 1:
+        raise RuntimeError(
+            f"Stored Dev page has {time_slicer_count} Time Comparison slicers; expected 1."
+        )
+    if year_slicer_count != 1:
+        raise RuntimeError(
+            f"Stored Dev page has {year_slicer_count} Year slicers; expected 1."
+        )
+
+    return len(visuals)
+
+
+def section(title):
+    print("\n" + "=" * 88)
+    print(title)
+    print("=" * 88)
+
+
+context = notebookutils.runtime.context
+workspace_id = context_value(context, "currentWorkspaceId")
+workspace_name = context_value(context, "currentWorkspaceName")
+if not workspace_id:
+    raise RuntimeError("The current Fabric workspace ID could not be obtained.")
+
+request_headers = headers()
+items = list_items(workspace_id, request_headers)
+report_item = find_item(items, REPORT_NAME, "Report")
+report_id = report_item["id"]
+get_url = f"{API_BASE}/workspaces/{workspace_id}/reports/{report_id}/getDefinition"
+update_url = f"{API_BASE}/workspaces/{workspace_id}/reports/{report_id}/updateDefinition"
+
+section("V1.2.0 DEV PAGE UPDATE")
+print(f"Workspace: {workspace_name}")
+print(f"Report: {REPORT_NAME}")
+print(f"Target page: {DEV_PAGE_NAME}")
+
+original_payload = post_for_result(get_url, request_headers)
+original_parts = decode_parts(original_payload)
+rollback_request_body = encode_parts(original_parts)
+working_parts = copy.deepcopy(original_parts)
+change_summary = prepare_report(working_parts)
+update_request_body = encode_parts(working_parts)
+
+section("PRE-DEPLOYMENT VALIDATION")
+print(f"Page ID: {change_summary['page_id']}")
+print(f"Year slicer ID: {change_summary['year_visual_id']}")
+print(f"New Time Comparison slicer ID: {change_summary['time_visual_id']}")
+print(f"Dev-page visuals before: {change_summary['visual_count_before']}")
+print(f"Dev-page visuals after: {change_summary['visual_count_after']}")
+print("Original Executive Overview page was not modified.")
+print("rollback_request_body prepared in memory.")
+
+try:
+    post_update(update_url, request_headers, update_request_body)
+    stored_visual_count = verify_report(
+        workspace_id, report_id, request_headers, change_summary
+    )
+except Exception as deployment_error:
+    print("Deployment or verification failed. Submitting complete rollback.")
+    post_update(update_url, request_headers, rollback_request_body)
+    raise RuntimeError(
+        "The Dev-page update failed and the previous complete report definition was restored."
+    ) from deployment_error
+
+section("FINAL STATUS")
+print("PASS: Time Comparison slicer added to Executive Overview v1.2 Dev.")
+print(f"Verified Dev-page visual definitions: {stored_visual_count}")
+print("Verified one Year slicer and one Time Comparison slicer.")
+print("Verified original Executive Overview page remained outside the update scope.")
+print("rollback_request_body remains available in the active notebook session.")
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+import base64
+import copy
+import json
+import time
+
+import notebookutils
+import requests
+
+SEMANTIC_MODEL_NAME = "Sales Records Model"
+GROUP_PATH = "definition/tables/Time Comparison.tmdl"
+API_BASE = "https://api.fabric.microsoft.com/v1"
+TIMEOUT_SECONDS = 120
+MAX_WAIT_SECONDS = 600
+
+
+def ctx_value(ctx, name):
+    return ctx.get(name) if isinstance(ctx, dict) else getattr(ctx, name, None)
+
+
+def headers():
+    token = notebookutils.credentials.getToken("pbi")
+    if not token:
+        raise RuntimeError("Fabric authentication token could not be obtained.")
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def fail(response):
+    if response.ok:
+        return
+    try:
+        body = response.json()
+    except ValueError:
+        body = response.text
+    raise RuntimeError(
+        f"Fabric API request failed. Status={response.status_code}; "
+        f"URL={response.url}; Response={body}"
+    )
+
+
+def wait(response, request_headers, expect_result):
+    fail(response)
+    if response.status_code == 200:
+        return response.json() if expect_result else None
+    if response.status_code != 202:
+        raise RuntimeError(f"Unexpected Fabric API status: {response.status_code}")
+
+    location = response.headers.get("Location")
+    operation_id = response.headers.get("x-ms-operation-id")
+    if not location and operation_id:
+        location = f"{API_BASE}/operations/{operation_id}"
+    if not location:
+        raise RuntimeError("Fabric returned HTTP 202 without an operation location.")
+
+    retry_after = int(response.headers.get("Retry-After", "5"))
+    started = time.time()
+    while True:
+        if time.time() - started > MAX_WAIT_SECONDS:
+            raise TimeoutError("Fabric operation exceeded the wait limit.")
+        time.sleep(max(retry_after, 1))
+        status_response = requests.get(
+            location, headers=request_headers, timeout=TIMEOUT_SECONDS
+        )
+        fail(status_response)
+        status_payload = status_response.json()
+        status = str(status_payload.get("status", "")).lower()
+        if status in {"succeeded", "completed"}:
+            if not expect_result:
+                return None
+            result_location = status_response.headers.get("Location")
+            if not result_location:
+                result_location = f"{location.rstrip('/')}/result"
+            result_response = requests.get(
+                result_location, headers=request_headers, timeout=TIMEOUT_SECONDS
+            )
+            fail(result_response)
+            return result_response.json()
+        if status in {"failed", "cancelled", "canceled"}:
+            raise RuntimeError(json.dumps(status_payload, indent=2))
+        retry_after = int(status_response.headers.get("Retry-After", "5"))
+
+
+def get_json(url, request_headers):
+    response = requests.get(url, headers=request_headers, timeout=TIMEOUT_SECONDS)
+    fail(response)
+    return response.json()
+
+
+def post_result(url, request_headers):
+    response = requests.post(url, headers=request_headers, timeout=TIMEOUT_SECONDS)
+    return wait(response, request_headers, True)
+
+
+def post_update(url, request_headers, body):
+    response = requests.post(
+        url, headers=request_headers, json=body, timeout=TIMEOUT_SECONDS
+    )
+    return wait(response, request_headers, False)
+
+
+def list_items(workspace_id, request_headers):
+    url = f"{API_BASE}/workspaces/{workspace_id}/items"
+    output = []
+    while url:
+        payload = get_json(url, request_headers)
+        output.extend(payload.get("value", []))
+        url = payload.get("continuationUri")
+    return output
+
+
+def find_item(items, name, item_type):
+    matches = [
+        item for item in items
+        if item.get("displayName") == name and item.get("type") == item_type
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected one {item_type} named '{name}', found {len(matches)}."
+        )
+    return matches[0]
+
+
+def decode_parts(payload):
+    output = {}
+    for part in payload.get("definition", {}).get("parts", []):
+        item = copy.deepcopy(part)
+        if item.get("payloadType") == "InlineBase64":
+            item["text"] = base64.b64decode(item["payload"]).decode("utf-8")
+        output[item["path"]] = item
+    return output
+
+
+def encode_parts(parts):
+    output = []
+    for path in sorted(parts):
+        item = copy.deepcopy(parts[path])
+        text = item.pop("text", None)
+        if text is not None:
+            item["payload"] = base64.b64encode(text.encode("utf-8")).decode("ascii")
+            item["payloadType"] = "InlineBase64"
+        output.append(item)
+    return {"definition": {"parts": output}}
+
+
+def corrected_group_tmdl():
+    return """table 'Time Comparison'
+\tcalculationGroup
+\t\tprecedence: 10
+\t\tcalculationItem Current = SELECTEDMEASURE()
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+\t\tcalculationItem 'Previous Year' = CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+\t\tcalculationItem YoY = SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+\t\tcalculationItem 'YoY %' = DIVIDE(SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
+\t\t\tformatStringDefinition = "0.00%;-0.00%;0.00%"
+\t\tcalculationItem YTD = CALCULATE(SELECTEDMEASURE(), DATESYTD('date'[full_date]))
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+\tcolumn 'Time Comparison'
+\t\tdataType: string
+\t\tsummarizeBy: none
+\t\tsourceColumn: Name
+\t\tsortByColumn: Ordinal
+
+\tcolumn Ordinal
+\t\tdataType: int64
+\t\tformatString: 0
+\t\tsummarizeBy: sum
+\t\tsourceColumn: Ordinal
+"""
+
+
+def verify(workspace_id, model_id, request_headers):
+    payload = post_result(
+        f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/getDefinition?format=TMDL",
+        request_headers,
+    )
+    parts = decode_parts(payload)
+    content = parts[GROUP_PATH]["text"]
+    required = [
+        "formatStringDefinition = SELECTEDMEASUREFORMATSTRING()",
+        'formatStringDefinition = "0.00%;-0.00%;0.00%"',
+        "SAMEPERIODLASTYEAR('date'[full_date])",
+        "DATESYTD('date'[full_date])",
+    ]
+    missing = [token for token in required if token not in content]
+    if missing:
+        raise RuntimeError(f"Stored definition is missing: {missing}")
+    return content
+
+
+context = notebookutils.runtime.context
+workspace_id = ctx_value(context, "currentWorkspaceId")
+if not workspace_id:
+    raise RuntimeError("Current workspace ID could not be obtained.")
+
+request_headers = headers()
+model = find_item(
+    list_items(workspace_id, request_headers),
+    SEMANTIC_MODEL_NAME,
+    "SemanticModel",
+)
+model_id = model["id"]
+get_url = (
+    f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/getDefinition?format=TMDL"
+)
+update_url = (
+    f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/updateDefinition"
+)
+
+original_payload = post_result(get_url, request_headers)
+original_parts = decode_parts(original_payload)
+if GROUP_PATH not in original_parts:
+    raise RuntimeError(f"Missing calculation-group part: {GROUP_PATH}")
+
+rollback_request_body = encode_parts(original_parts)
+working_parts = copy.deepcopy(original_parts)
+working_parts[GROUP_PATH]["text"] = corrected_group_tmdl()
+update_request_body = encode_parts(working_parts)
+
+try:
+    post_update(update_url, request_headers, update_request_body)
+    stored_tmdl = verify(workspace_id, model_id, request_headers)
+except Exception as deployment_error:
+    print("Update failed. Restoring the complete previous semantic-model definition.")
+    post_update(update_url, request_headers, rollback_request_body)
+    raise RuntimeError(
+        "Format update failed and the previous semantic-model definition was restored."
+    ) from deployment_error
+
+print("=" * 88)
+print("FINAL STATUS")
+print("=" * 88)
+print("PASS: Time Comparison formats deployed and stored definition verified.")
+print("YoY % now uses 0.00% formatting.")
+print("Current, Previous Year, YoY, and YTD preserve each selected measure format.")
+print("rollback_request_body remains available in the active notebook session.")
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }

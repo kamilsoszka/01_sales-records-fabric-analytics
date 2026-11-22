@@ -1,0 +1,37 @@
+table 'Time Comparison'
+
+	calculationGroup
+		precedence: 10
+
+		calculationItem Current = SELECTEDMEASURE()
+
+			formatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+		calculationItem 'Previous Year' = CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))
+
+			formatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+		calculationItem YoY = SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))
+
+			formatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+		calculationItem 'YoY %' = DIVIDE(SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
+
+			formatStringDefinition = "0.00%;-0.00%;0.00%"
+
+		calculationItem YTD = CALCULATE(SELECTEDMEASURE(), DATESYTD('date'[full_date]))
+
+			formatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+	column 'Time Comparison'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: Name
+		sortByColumn: Ordinal
+
+	column Ordinal
+		dataType: int64
+		formatString: 0
+		summarizeBy: sum
+		sourceColumn: Ordinal
+

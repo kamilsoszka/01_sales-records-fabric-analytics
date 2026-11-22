@@ -1,6 +1,7 @@
 model Model
 	culture: en-US
 	defaultPowerBIDataSourceVersion: powerBI_V3
+	discourageImplicitMeasures
 	sourceQueryCulture: en-US
 	dataAccessOptions
 		legacyRedirects
@@ -20,4 +21,5 @@ ref table product
 ref table sales
 ref table saleschannel
 ref table _Measures
+ref table 'Time Comparison'
 
