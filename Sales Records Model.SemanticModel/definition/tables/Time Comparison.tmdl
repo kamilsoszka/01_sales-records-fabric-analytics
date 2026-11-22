@@ -7,19 +7,19 @@ table 'Time Comparison'
 
 			formatStringDefinition = SELECTEDMEASUREFORMATSTRING()
 
-		calculationItem 'Previous Year' = CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))
+		calculationItem 'Previous Year' = IF(ISSELECTEDMEASURE([Profit Margin %], [Revenue Budget Attainment %], [Profit Budget Attainment %], [Revenue Variance %], [Profit Variance %]), SELECTEDMEASURE(), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
 
 			formatStringDefinition = SELECTEDMEASUREFORMATSTRING()
 
-		calculationItem YoY = SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))
+		calculationItem YoY = IF(ISSELECTEDMEASURE([Profit Margin %], [Revenue Budget Attainment %], [Profit Budget Attainment %], [Revenue Variance %], [Profit Variance %]), SELECTEDMEASURE(), SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
 
 			formatStringDefinition = SELECTEDMEASUREFORMATSTRING()
 
-		calculationItem 'YoY %' = DIVIDE(SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
+		calculationItem 'YoY %' = IF(ISSELECTEDMEASURE([Profit Margin %], [Revenue Budget Attainment %], [Profit Budget Attainment %], [Revenue Variance %], [Profit Variance %]), SELECTEDMEASURE(), DIVIDE(SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))))
 
-			formatStringDefinition = "0.00%;-0.00%;0.00%"
+			formatStringDefinition = IF(ISSELECTEDMEASURE([Profit Margin %], [Revenue Budget Attainment %], [Profit Budget Attainment %], [Revenue Variance %], [Profit Variance %]), SELECTEDMEASUREFORMATSTRING(), "0.00%;-0.00%;0.00%")
 
-		calculationItem YTD = CALCULATE(SELECTEDMEASURE(), DATESYTD('date'[full_date]))
+		calculationItem YTD = IF(ISSELECTEDMEASURE([Profit Margin %], [Revenue Budget Attainment %], [Profit Budget Attainment %], [Revenue Variance %], [Profit Variance %]), SELECTEDMEASURE(), CALCULATE(SELECTEDMEASURE(), DATESYTD('date'[full_date])))
 
 			formatStringDefinition = SELECTEDMEASUREFORMATSTRING()
 

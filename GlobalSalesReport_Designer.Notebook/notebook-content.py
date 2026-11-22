@@ -6870,6 +6870,776 @@ print("rollback_request_body remains available in the active notebook session.")
 
 # CELL ********************
 
+import base64
+import copy
+import json
+import time
+
+import notebookutils
+import requests
+
+REPORT_NAME = "Global Sales Performance Dashboard"
+SEMANTIC_MODEL_NAME = "Sales Records Model"
+TARGET_PAGE_NAME = "Executive Overview v1.2 Dev"
+TARGET_YEAR = "2019L"
+API_BASE = "https://api.fabric.microsoft.com/v1"
+TIMEOUT_SECONDS = 120
+MAX_WAIT_SECONDS = 600
+GROUP_PATH = "definition/tables/Time Comparison.tmdl"
+
+
+def context_value(context, name):
+    return context.get(name) if isinstance(context, dict) else getattr(context, name, None)
+
+
+def request_headers():
+    token = notebookutils.credentials.getToken("pbi")
+    if not token:
+        raise RuntimeError("Fabric authentication token could not be obtained.")
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def raise_api_error(response):
+    if response.ok:
+        return
+    try:
+        body = response.json()
+    except ValueError:
+        body = response.text
+    raise RuntimeError(
+        f"Fabric API request failed. Status={response.status_code}; "
+        f"URL={response.url}; Response={body}"
+    )
+
+
+def wait_for_operation(response, headers, expect_result):
+    raise_api_error(response)
+    if response.status_code == 200:
+        return response.json() if expect_result else None
+    if response.status_code != 202:
+        raise RuntimeError(f"Unexpected Fabric API status: {response.status_code}")
+
+    location = response.headers.get("Location")
+    operation_id = response.headers.get("x-ms-operation-id")
+    if not location and operation_id:
+        location = f"{API_BASE}/operations/{operation_id}"
+    if not location:
+        raise RuntimeError("Fabric returned HTTP 202 without an operation location.")
+
+    retry_after = int(response.headers.get("Retry-After", "5"))
+    started_at = time.time()
+    while True:
+        if time.time() - started_at > MAX_WAIT_SECONDS:
+            raise TimeoutError("Fabric operation exceeded the wait limit.")
+        time.sleep(max(retry_after, 1))
+        status_response = requests.get(location, headers=headers, timeout=TIMEOUT_SECONDS)
+        raise_api_error(status_response)
+        payload = status_response.json()
+        status = str(payload.get("status", "")).lower()
+        if status in {"succeeded", "completed"}:
+            if not expect_result:
+                return None
+            result_location = status_response.headers.get("Location") or f"{location.rstrip('/')}/result"
+            result_response = requests.get(result_location, headers=headers, timeout=TIMEOUT_SECONDS)
+            raise_api_error(result_response)
+            return result_response.json()
+        if status in {"failed", "cancelled", "canceled"}:
+            raise RuntimeError(json.dumps(payload, indent=2))
+        retry_after = int(status_response.headers.get("Retry-After", "5"))
+
+
+def get_json(url, headers):
+    response = requests.get(url, headers=headers, timeout=TIMEOUT_SECONDS)
+    raise_api_error(response)
+    return response.json()
+
+
+def post_result(url, headers):
+    response = requests.post(url, headers=headers, timeout=TIMEOUT_SECONDS)
+    return wait_for_operation(response, headers, True)
+
+
+def post_update(url, headers, body):
+    response = requests.post(url, headers=headers, json=body, timeout=TIMEOUT_SECONDS)
+    return wait_for_operation(response, headers, False)
+
+
+def list_items(workspace_id, headers):
+    url = f"{API_BASE}/workspaces/{workspace_id}/items"
+    items = []
+    while url:
+        payload = get_json(url, headers)
+        items.extend(payload.get("value", []))
+        url = payload.get("continuationUri")
+    return items
+
+
+def find_item(items, display_name, item_type):
+    matches = [
+        item for item in items
+        if item.get("displayName") == display_name and item.get("type") == item_type
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected one {item_type} named '{display_name}', found {len(matches)}."
+        )
+    return matches[0]
+
+
+def decode_parts(payload):
+    parts = {}
+    for source_part in payload.get("definition", {}).get("parts", []):
+        part = copy.deepcopy(source_part)
+        if part.get("payloadType") == "InlineBase64":
+            part["text"] = base64.b64decode(part["payload"]).decode("utf-8")
+        parts[part["path"]] = part
+    return parts
+
+
+def encode_parts(parts):
+    output = []
+    for path in sorted(parts):
+        part = copy.deepcopy(parts[path])
+        text = part.pop("text", None)
+        if text is not None:
+            part["payload"] = base64.b64encode(text.encode("utf-8")).decode("ascii")
+            part["payloadType"] = "InlineBase64"
+        output.append(part)
+    return {"definition": {"parts": output}}
+
+
+def load_json(parts, path):
+    if path not in parts:
+        raise KeyError(f"Missing definition part: {path}")
+    return json.loads(parts[path]["text"])
+
+
+def save_json(parts, path, value):
+    parts[path]["text"] = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def walk(node):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from walk(value)
+
+
+def visual_type(definition):
+    return definition.get("visual", {}).get("visualType", "")
+
+
+def find_target_page(parts):
+    metadata = load_json(parts, "definition/pages/pages.json")
+    matches = []
+    for page_id in metadata.get("pageOrder", []):
+        path = f"definition/pages/{page_id}/page.json"
+        page = load_json(parts, path)
+        if page.get("displayName") == TARGET_PAGE_NAME:
+            matches.append(page_id)
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected one page named '{TARGET_PAGE_NAME}', found {len(matches)}."
+        )
+    return matches[0]
+
+
+def is_year_slicer(definition):
+    if visual_type(definition) != "slicer":
+        return False
+    for node in walk(definition):
+        column = node.get("Column")
+        if not isinstance(column, dict):
+            continue
+        source = column.get("Expression", {}).get("SourceRef", {})
+        if source.get("Entity") == "date" and column.get("Property") == "year":
+            return True
+    return False
+
+
+def set_year_filter(definition):
+    changed = 0
+    general = definition.get("visual", {}).get("objects", {}).get("general", [])
+    for item in general:
+        filter_body = item.get("properties", {}).get("filter", {}).get("filter", {})
+        for node in walk(filter_body):
+            literal = node.get("Literal")
+            if isinstance(literal, dict):
+                value = literal.get("Value")
+                if isinstance(value, str) and value.endswith("L") and value[:-1].isdigit():
+                    literal["Value"] = TARGET_YEAR
+                    changed += 1
+    if changed != 1:
+        raise RuntimeError(f"Expected one stored Year literal, changed {changed}.")
+
+
+def set_auto_units(definition):
+    changed = 0
+    objects = definition.get("visual", {}).get("objects", {})
+    for object_name in ("labels", "valueAxis"):
+        for item in objects.get(object_name, []):
+            properties = item.get("properties", {})
+            units = properties.get("labelDisplayUnits")
+            if not isinstance(units, dict):
+                continue
+            literal = units.get("expr", {}).get("Literal")
+            if isinstance(literal, dict):
+                literal["Value"] = "1D"
+                changed += 1
+    return changed
+
+
+def prepare_report(parts):
+    page_id = find_target_page(parts)
+    prefix = f"definition/pages/{page_id}/visuals/"
+    visual_paths = [
+        path for path in parts
+        if path.startswith(prefix) and path.endswith("/visual.json")
+    ]
+    if len(visual_paths) != 12:
+        raise RuntimeError(f"Expected 12 Dev-page visuals, found {len(visual_paths)}.")
+
+    year_slicers = 0
+    unit_changes = 0
+    for path in visual_paths:
+        definition = load_json(parts, path)
+        if is_year_slicer(definition):
+            set_year_filter(definition)
+            year_slicers += 1
+        if visual_type(definition) in {"clusteredBarChart", "lineChart"}:
+            unit_changes += set_auto_units(definition)
+        save_json(parts, path, definition)
+
+    if year_slicers != 1:
+        raise RuntimeError(f"Expected one Year slicer, found {year_slicers}.")
+    if unit_changes < 4:
+        raise RuntimeError(
+            f"Expected at least four chart display-unit changes, found {unit_changes}."
+        )
+    return page_id, len(visual_paths), unit_changes
+
+
+def protected_group_tmdl():
+    protected = (
+        "ISSELECTEDMEASURE([Profit Margin %], [Revenue Budget Attainment %], "
+        "[Profit Budget Attainment %], [Revenue Variance %], [Profit Variance %])"
+    )
+    return f"""table 'Time Comparison'
+\tcalculationGroup
+\t\tprecedence: 10
+\t\tcalculationItem Current = SELECTEDMEASURE()
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+\t\tcalculationItem 'Previous Year' = IF({protected}, SELECTEDMEASURE(), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+\t\tcalculationItem YoY = IF({protected}, SELECTEDMEASURE(), SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+\t\tcalculationItem 'YoY %' = IF({protected}, SELECTEDMEASURE(), DIVIDE(SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))))
+\t\t\tformatStringDefinition = IF({protected}, SELECTEDMEASUREFORMATSTRING(), "0.00%;-0.00%;0.00%")
+\t\tcalculationItem YTD = IF({protected}, SELECTEDMEASURE(), CALCULATE(SELECTEDMEASURE(), DATESYTD('date'[full_date])))
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+\tcolumn 'Time Comparison'
+\t\tdataType: string
+\t\tsummarizeBy: none
+\t\tsourceColumn: Name
+\t\tsortByColumn: Ordinal
+
+\tcolumn Ordinal
+\t\tdataType: int64
+\t\tformatString: 0
+\t\tsummarizeBy: sum
+\t\tsourceColumn: Ordinal
+"""
+
+
+def verify_report(workspace_id, report_id, headers, expected_page_id):
+    payload = post_result(
+        f"{API_BASE}/workspaces/{workspace_id}/reports/{report_id}/getDefinition",
+        headers,
+    )
+    parts = decode_parts(payload)
+    if find_target_page(parts) != expected_page_id:
+        raise RuntimeError("Stored target-page ID changed unexpectedly.")
+    prefix = f"definition/pages/{expected_page_id}/visuals/"
+    paths = [p for p in parts if p.startswith(prefix) and p.endswith("/visual.json")]
+    if len(paths) != 12:
+        raise RuntimeError(f"Stored Dev page has {len(paths)} visuals, expected 12.")
+    year_count = 0
+    for path in paths:
+        definition = load_json(parts, path)
+        if is_year_slicer(definition):
+            year_count += 1
+            text = json.dumps(definition)
+            if '"Value": "2019L"' not in text and '"Value":"2019L"' not in text:
+                raise RuntimeError("Stored Year slicer is not set to 2019.")
+    if year_count != 1:
+        raise RuntimeError(f"Stored Dev page has {year_count} Year slicers.")
+
+
+def verify_model(workspace_id, model_id, headers):
+    payload = post_result(
+        f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/getDefinition?format=TMDL",
+        headers,
+    )
+    parts = decode_parts(payload)
+    text = parts[GROUP_PATH]["text"]
+    required = [
+        "ISSELECTEDMEASURE([Profit Margin %]",
+        "formatStringDefinition = IF(",
+        "SAMEPERIODLASTYEAR('date'[full_date])",
+        "DATESYTD('date'[full_date])",
+    ]
+    missing = [token for token in required if token not in text]
+    if missing:
+        raise RuntimeError(f"Stored calculation group is missing: {missing}")
+
+
+context = notebookutils.runtime.context
+workspace_id = context_value(context, "currentWorkspaceId")
+if not workspace_id:
+    raise RuntimeError("Current workspace ID could not be obtained.")
+
+headers = request_headers()
+items = list_items(workspace_id, headers)
+report = find_item(items, REPORT_NAME, "Report")
+model = find_item(items, SEMANTIC_MODEL_NAME, "SemanticModel")
+
+report_get = f"{API_BASE}/workspaces/{workspace_id}/reports/{report['id']}/getDefinition"
+report_update = f"{API_BASE}/workspaces/{workspace_id}/reports/{report['id']}/updateDefinition"
+model_get = f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model['id']}/getDefinition?format=TMDL"
+model_update = f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model['id']}/updateDefinition"
+
+original_report_payload = post_result(report_get, headers)
+original_model_payload = post_result(model_get, headers)
+report_parts = decode_parts(original_report_payload)
+model_parts = decode_parts(original_model_payload)
+report_rollback_request_body = encode_parts(report_parts)
+model_rollback_request_body = encode_parts(model_parts)
+
+working_report_parts = copy.deepcopy(report_parts)
+working_model_parts = copy.deepcopy(model_parts)
+page_id, visual_count, unit_changes = prepare_report(working_report_parts)
+if GROUP_PATH not in working_model_parts:
+    raise RuntimeError(f"Missing calculation group part: {GROUP_PATH}")
+working_model_parts[GROUP_PATH]["text"] = protected_group_tmdl()
+
+try:
+    post_update(model_update, headers, encode_parts(working_model_parts))
+    verify_model(workspace_id, model["id"], headers)
+    post_update(report_update, headers, encode_parts(working_report_parts))
+    verify_report(workspace_id, report["id"], headers, page_id)
+except Exception as deployment_error:
+    print("Deployment failed. Restoring complete model and report definitions.")
+    post_update(model_update, headers, model_rollback_request_body)
+    post_update(report_update, headers, report_rollback_request_body)
+    raise RuntimeError(
+        "Finalization failed and both previous definitions were restored."
+    ) from deployment_error
+
+print("=" * 88)
+print("FINAL STATUS")
+print("=" * 88)
+print("PASS: Verified v1.2 scope finalized.")
+print(f"Target page ID: {page_id}")
+print(f"Verified visual definitions: {visual_count}")
+print(f"Chart display-unit properties changed to Auto: {unit_changes}")
+print("Verified Year default: 2019")
+print("Verified protected percentage measures in Time Comparison.")
+print("Complete report and model rollback payloads remain in this notebook session.")
+
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+import base64
+import copy
+import json
+import time
+
+import notebookutils
+import requests
+
+REPORT_NAME = "Global Sales Performance Dashboard"
+SEMANTIC_MODEL_NAME = "Sales Records Model"
+TARGET_PAGE_NAME = "Executive Overview v1.2 Dev"
+TARGET_YEAR = "2019L"
+API_BASE = "https://api.fabric.microsoft.com/v1"
+TIMEOUT_SECONDS = 120
+MAX_WAIT_SECONDS = 600
+GROUP_PATH = "definition/tables/Time Comparison.tmdl"
+
+
+def context_value(context, name):
+    return context.get(name) if isinstance(context, dict) else getattr(context, name, None)
+
+
+def request_headers():
+    token = notebookutils.credentials.getToken("pbi")
+    if not token:
+        raise RuntimeError("Fabric authentication token could not be obtained.")
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def raise_api_error(response):
+    if response.ok:
+        return
+    try:
+        body = response.json()
+    except ValueError:
+        body = response.text
+    raise RuntimeError(
+        f"Fabric API request failed. Status={response.status_code}; "
+        f"URL={response.url}; Response={body}"
+    )
+
+
+def wait_for_operation(response, headers, expect_result):
+    raise_api_error(response)
+    if response.status_code == 200:
+        return response.json() if expect_result else None
+    if response.status_code != 202:
+        raise RuntimeError(f"Unexpected Fabric API status: {response.status_code}")
+
+    location = response.headers.get("Location")
+    operation_id = response.headers.get("x-ms-operation-id")
+    if not location and operation_id:
+        location = f"{API_BASE}/operations/{operation_id}"
+    if not location:
+        raise RuntimeError("Fabric returned HTTP 202 without an operation location.")
+
+    retry_after = int(response.headers.get("Retry-After", "5"))
+    started_at = time.time()
+    while True:
+        if time.time() - started_at > MAX_WAIT_SECONDS:
+            raise TimeoutError("Fabric operation exceeded the wait limit.")
+        time.sleep(max(retry_after, 1))
+        status_response = requests.get(location, headers=headers, timeout=TIMEOUT_SECONDS)
+        raise_api_error(status_response)
+        payload = status_response.json()
+        status = str(payload.get("status", "")).lower()
+        if status in {"succeeded", "completed"}:
+            if not expect_result:
+                return None
+            result_location = status_response.headers.get("Location") or f"{location.rstrip('/')}/result"
+            result_response = requests.get(result_location, headers=headers, timeout=TIMEOUT_SECONDS)
+            raise_api_error(result_response)
+            return result_response.json()
+        if status in {"failed", "cancelled", "canceled"}:
+            raise RuntimeError(json.dumps(payload, indent=2))
+        retry_after = int(status_response.headers.get("Retry-After", "5"))
+
+
+def get_json(url, headers):
+    response = requests.get(url, headers=headers, timeout=TIMEOUT_SECONDS)
+    raise_api_error(response)
+    return response.json()
+
+
+def post_result(url, headers):
+    response = requests.post(url, headers=headers, timeout=TIMEOUT_SECONDS)
+    return wait_for_operation(response, headers, True)
+
+
+def post_update(url, headers, body):
+    response = requests.post(url, headers=headers, json=body, timeout=TIMEOUT_SECONDS)
+    return wait_for_operation(response, headers, False)
+
+
+def list_items(workspace_id, headers):
+    url = f"{API_BASE}/workspaces/{workspace_id}/items"
+    items = []
+    while url:
+        payload = get_json(url, headers)
+        items.extend(payload.get("value", []))
+        url = payload.get("continuationUri")
+    return items
+
+
+def find_item(items, display_name, item_type):
+    matches = [
+        item for item in items
+        if item.get("displayName") == display_name and item.get("type") == item_type
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected one {item_type} named '{display_name}', found {len(matches)}."
+        )
+    return matches[0]
+
+
+def decode_parts(payload):
+    parts = {}
+    for source_part in payload.get("definition", {}).get("parts", []):
+        part = copy.deepcopy(source_part)
+        if part.get("payloadType") == "InlineBase64":
+            part["text"] = base64.b64decode(part["payload"]).decode("utf-8")
+        parts[part["path"]] = part
+    return parts
+
+
+def encode_parts(parts):
+    output = []
+    for path in sorted(parts):
+        part = copy.deepcopy(parts[path])
+        text = part.pop("text", None)
+        if text is not None:
+            part["payload"] = base64.b64encode(text.encode("utf-8")).decode("ascii")
+            part["payloadType"] = "InlineBase64"
+        output.append(part)
+    return {"definition": {"parts": output}}
+
+
+def load_json(parts, path):
+    if path not in parts:
+        raise KeyError(f"Missing definition part: {path}")
+    return json.loads(parts[path]["text"])
+
+
+def save_json(parts, path, value):
+    parts[path]["text"] = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def walk(node):
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from walk(value)
+
+
+def visual_type(definition):
+    return definition.get("visual", {}).get("visualType", "")
+
+
+def find_target_page(parts):
+    metadata = load_json(parts, "definition/pages/pages.json")
+    matches = []
+    for page_id in metadata.get("pageOrder", []):
+        path = f"definition/pages/{page_id}/page.json"
+        page = load_json(parts, path)
+        if page.get("displayName") == TARGET_PAGE_NAME:
+            matches.append(page_id)
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected one page named '{TARGET_PAGE_NAME}', found {len(matches)}."
+        )
+    return matches[0]
+
+
+def is_year_slicer(definition):
+    if visual_type(definition) != "slicer":
+        return False
+    for node in walk(definition):
+        column = node.get("Column")
+        if not isinstance(column, dict):
+            continue
+        source = column.get("Expression", {}).get("SourceRef", {})
+        if source.get("Entity") == "date" and column.get("Property") == "year":
+            return True
+    return False
+
+
+def set_year_filter(definition):
+    changed = 0
+    general = definition.get("visual", {}).get("objects", {}).get("general", [])
+    for item in general:
+        filter_body = item.get("properties", {}).get("filter", {}).get("filter", {})
+        for node in walk(filter_body):
+            literal = node.get("Literal")
+            if isinstance(literal, dict):
+                value = literal.get("Value")
+                if isinstance(value, str) and value.endswith("L") and value[:-1].isdigit():
+                    literal["Value"] = TARGET_YEAR
+                    changed += 1
+    if changed != 1:
+        raise RuntimeError(f"Expected one stored Year literal, changed {changed}.")
+
+
+def set_auto_units(definition):
+    changed = 0
+    objects = definition.get("visual", {}).get("objects", {})
+    for object_name in ("labels", "valueAxis"):
+        for item in objects.get(object_name, []):
+            properties = item.get("properties", {})
+            units = properties.get("labelDisplayUnits")
+            if not isinstance(units, dict):
+                continue
+            literal = units.get("expr", {}).get("Literal")
+            if isinstance(literal, dict):
+                literal["Value"] = "1D"
+                changed += 1
+    return changed
+
+
+def prepare_report(parts):
+    page_id = find_target_page(parts)
+    prefix = f"definition/pages/{page_id}/visuals/"
+    visual_paths = [
+        path for path in parts
+        if path.startswith(prefix) and path.endswith("/visual.json")
+    ]
+    if len(visual_paths) != 12:
+        raise RuntimeError(f"Expected 12 Dev-page visuals, found {len(visual_paths)}.")
+
+    year_slicers = 0
+    unit_changes = 0
+    for path in visual_paths:
+        definition = load_json(parts, path)
+        if is_year_slicer(definition):
+            set_year_filter(definition)
+            year_slicers += 1
+        if visual_type(definition) in {"clusteredBarChart", "lineChart"}:
+            unit_changes += set_auto_units(definition)
+        save_json(parts, path, definition)
+
+    if year_slicers != 1:
+        raise RuntimeError(f"Expected one Year slicer, found {year_slicers}.")
+    if unit_changes < 4:
+        raise RuntimeError(
+            f"Expected at least four chart display-unit changes, found {unit_changes}."
+        )
+    return page_id, len(visual_paths), unit_changes
+
+
+def protected_group_tmdl():
+    protected = (
+        "ISSELECTEDMEASURE([Profit Margin %], [Revenue Budget Attainment %], "
+        "[Profit Budget Attainment %], [Revenue Variance %], [Profit Variance %])"
+    )
+    return f"""table 'Time Comparison'
+\tcalculationGroup
+\t\tprecedence: 10
+\t\tcalculationItem Current = SELECTEDMEASURE()
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+\t\tcalculationItem 'Previous Year' = IF({protected}, SELECTEDMEASURE(), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+\t\tcalculationItem YoY = IF({protected}, SELECTEDMEASURE(), SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])))
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+\t\tcalculationItem 'YoY %' = IF({protected}, SELECTEDMEASURE(), DIVIDE(SELECTEDMEASURE() - CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date])), CALCULATE(SELECTEDMEASURE(), SAMEPERIODLASTYEAR('date'[full_date]))))
+\t\t\tformatStringDefinition = IF({protected}, SELECTEDMEASUREFORMATSTRING(), "0.00%;-0.00%;0.00%")
+\t\tcalculationItem YTD = IF({protected}, SELECTEDMEASURE(), CALCULATE(SELECTEDMEASURE(), DATESYTD('date'[full_date])))
+\t\t\tformatStringDefinition = SELECTEDMEASUREFORMATSTRING()
+
+\tcolumn 'Time Comparison'
+\t\tdataType: string
+\t\tsummarizeBy: none
+\t\tsourceColumn: Name
+\t\tsortByColumn: Ordinal
+
+\tcolumn Ordinal
+\t\tdataType: int64
+\t\tformatString: 0
+\t\tsummarizeBy: sum
+\t\tsourceColumn: Ordinal
+"""
+
+
+def verify_report(workspace_id, report_id, headers, expected_page_id):
+    payload = post_result(
+        f"{API_BASE}/workspaces/{workspace_id}/reports/{report_id}/getDefinition",
+        headers,
+    )
+    parts = decode_parts(payload)
+    if find_target_page(parts) != expected_page_id:
+        raise RuntimeError("Stored target-page ID changed unexpectedly.")
+    prefix = f"definition/pages/{expected_page_id}/visuals/"
+    paths = [p for p in parts if p.startswith(prefix) and p.endswith("/visual.json")]
+    if len(paths) != 12:
+        raise RuntimeError(f"Stored Dev page has {len(paths)} visuals, expected 12.")
+    year_count = 0
+    for path in paths:
+        definition = load_json(parts, path)
+        if is_year_slicer(definition):
+            year_count += 1
+            text = json.dumps(definition)
+            if '"Value": "2019L"' not in text and '"Value":"2019L"' not in text:
+                raise RuntimeError("Stored Year slicer is not set to 2019.")
+    if year_count != 1:
+        raise RuntimeError(f"Stored Dev page has {year_count} Year slicers.")
+
+
+def verify_model(workspace_id, model_id, headers):
+    payload = post_result(
+        f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model_id}/getDefinition?format=TMDL",
+        headers,
+    )
+    parts = decode_parts(payload)
+    text = parts[GROUP_PATH]["text"]
+    required = [
+        "ISSELECTEDMEASURE([Profit Margin %]",
+        "formatStringDefinition = IF(",
+        "SAMEPERIODLASTYEAR('date'[full_date])",
+        "DATESYTD('date'[full_date])",
+    ]
+    missing = [token for token in required if token not in text]
+    if missing:
+        raise RuntimeError(f"Stored calculation group is missing: {missing}")
+
+
+context = notebookutils.runtime.context
+workspace_id = context_value(context, "currentWorkspaceId")
+if not workspace_id:
+    raise RuntimeError("Current workspace ID could not be obtained.")
+
+headers = request_headers()
+items = list_items(workspace_id, headers)
+report = find_item(items, REPORT_NAME, "Report")
+model = find_item(items, SEMANTIC_MODEL_NAME, "SemanticModel")
+
+report_get = f"{API_BASE}/workspaces/{workspace_id}/reports/{report['id']}/getDefinition"
+report_update = f"{API_BASE}/workspaces/{workspace_id}/reports/{report['id']}/updateDefinition"
+model_get = f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model['id']}/getDefinition?format=TMDL"
+model_update = f"{API_BASE}/workspaces/{workspace_id}/semanticModels/{model['id']}/updateDefinition"
+
+original_report_payload = post_result(report_get, headers)
+original_model_payload = post_result(model_get, headers)
+report_parts = decode_parts(original_report_payload)
+model_parts = decode_parts(original_model_payload)
+report_rollback_request_body = encode_parts(report_parts)
+model_rollback_request_body = encode_parts(model_parts)
+
+working_report_parts = copy.deepcopy(report_parts)
+working_model_parts = copy.deepcopy(model_parts)
+page_id, visual_count, unit_changes = prepare_report(working_report_parts)
+if GROUP_PATH not in working_model_parts:
+    raise RuntimeError(f"Missing calculation group part: {GROUP_PATH}")
+working_model_parts[GROUP_PATH]["text"] = protected_group_tmdl()
+
+try:
+    post_update(model_update, headers, encode_parts(working_model_parts))
+    verify_model(workspace_id, model["id"], headers)
+    post_update(report_update, headers, encode_parts(working_report_parts))
+    verify_report(workspace_id, report["id"], headers, page_id)
+except Exception as deployment_error:
+    print("Deployment failed. Restoring complete model and report definitions.")
+    post_update(model_update, headers, model_rollback_request_body)
+    post_update(report_update, headers, report_rollback_request_body)
+    raise RuntimeError(
+        "Finalization failed and both previous definitions were restored."
+    ) from deployment_error
+
+print("=" * 88)
+print("FINAL STATUS")
+print("=" * 88)
+print("PASS: Verified v1.2 scope finalized.")
+print(f"Target page ID: {page_id}")
+print(f"Verified visual definitions: {visual_count}")
+print(f"Chart display-unit properties changed to Auto: {unit_changes}")
+print("Verified Year default: 2019")
+print("Verified protected percentage measures in Time Comparison.")
+print("Complete report and model rollback payloads remain in this notebook session.")
+
 
 # METADATA ********************
 
